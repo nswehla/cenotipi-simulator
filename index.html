@@ -2429,6 +2429,10 @@
     var bx = 0.55, bz = 0.35;
     var x1 = bx - 0.24, z1 = bz - 0.16, y1 = 1.17;
     if (!proj(bx, 0.05, bz, pr) || !proj(x1, y1, z1, pr2)) return;
+    // ambient day/night: the fixture's metal brightens with daylight (a black-can
+    // silhouette at noon looks wrong), and its glow drowns out as ambience rises
+    var sdayF = (P.dayNight == null ? 0.12 : P.dayNight / 100);
+    function sdl2(n, d) { return (n + (d - n) * sdayF) | 0; }
     // U-mount yoke, built in 3D: a pivot bolt on each SIDE of the can at mid-height, and a
     // leg that stays on its OWN side — bolt straight down to a slightly splayed ground foot.
     // Legs never cross the body silhouette; the far leg draws first so the can occludes it.
@@ -2444,11 +2448,12 @@
       var fx2 = x1 + (x1 - bx) * 0.55 + sdx * rr * 1.35 * side;
       var fz2 = z1 + (z1 - bz) * 0.55 + sdz * rr * 1.35 * side;
       if (!proj(px2, my, pz2, pr3) || !proj(fx2, 0.02, fz2, pr4)) return;
-      ctx.strokeStyle = '#454d52'; ctx.lineWidth = uw; ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgb(' + sdl2(69, 138) + ',' + sdl2(77, 146) + ',' + sdl2(82, 153) + ')';
+      ctx.lineWidth = uw; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.stroke();
-      ctx.fillStyle = '#3a4145';                               // foot pad
+      ctx.fillStyle = 'rgb(' + sdl2(58, 122) + ',' + sdl2(65, 130) + ',' + sdl2(69, 136) + ')';   // foot pad
       ctx.beginPath(); ctx.ellipse(pr4[0], pr4[1], Math.max(1.5, pr4[2] * 0.09), Math.max(1, pr4[2] * 0.04), 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#5a6368';                               // pivot bolt head
+      ctx.fillStyle = 'rgb(' + sdl2(90, 162) + ',' + sdl2(99, 170) + ',' + sdl2(104, 177) + ')';  // pivot bolt head
       ctx.beginPath(); ctx.arc(pr3[0], pr3[1], Math.max(1.5, pr3[2] * 0.05), 0, Math.PI * 2); ctx.fill();
     }
     var sA = proj(mx + sdx * rr, my, mz + sdz * rr, pr3) ? pr3[2] : 0;
@@ -2481,7 +2486,9 @@
           var cf = (nx * (C[0] - qx) + ny * (C[1] - qy) + nz * (C[2] - qz)) / (CR * qd);
           if ((pass === 0) !== (cf < 0)) continue;
           var lum = Math.max(0, cf);                           // grazing sides darker: reads round
-          ctx.fillStyle = 'rgb(' + ((26 + 34 * lum) | 0) + ',' + ((29 + 39 * lum) | 0) + ',' + ((31 + 42 * lum) | 0) + ')';
+          ctx.fillStyle = 'rgb(' + ((sdl2(26, 106) + sdl2(34, 52) * lum) | 0) + ',' +
+                          ((sdl2(29, 111) + sdl2(39, 55) * lum) | 0) + ',' +
+                          ((sdl2(31, 116) + sdl2(42, 58) * lum) | 0) + ')';
           ctx.beginPath();
           ctx.moveTo(bot[ck][0], bot[ck][1]); ctx.lineTo(bot[ck + 1][0], bot[ck + 1][1]);
           ctx.lineTo(topR[ck + 1][0], topR[ck + 1][1]); ctx.lineTo(topR[ck][0], topR[ck][1]);
@@ -2496,16 +2503,23 @@
       if (-(dxA * (C[0] - bx) + dyA * (C[1] - 0.05) + dzA * (C[2] - bz)) > 0) {
         ctx.beginPath(); ctx.moveTo(bot[0][0], bot[0][1]);
         for (ck = 1; ck <= CN; ck++) ctx.lineTo(bot[ck][0], bot[ck][1]);
-        ctx.closePath(); ctx.fillStyle = '#16191b'; ctx.fill();
+        ctx.closePath();
+        ctx.fillStyle = 'rgb(' + sdl2(22, 88) + ',' + sdl2(25, 93) + ',' + sdl2(27, 97) + ')';
+        ctx.fill();
       }
       if (lensF > 0) {
         ctx.beginPath(); ctx.moveTo(topR[0][0], topR[0][1]);
         for (ck = 1; ck <= CN; ck++) ctx.lineTo(topR[ck][0], topR[ck][1]);
-        ctx.closePath(); ctx.fillStyle = P.spotOn === false ? '#2b3033' : fc; ctx.fill();
+        ctx.closePath();
+        ctx.fillStyle = P.spotOn === false
+          ? 'rgb(' + sdl2(43, 118) + ',' + sdl2(48, 125) + ',' + sdl2(51, 130) + ')'
+          : fc;
+        ctx.fill();
         if (P.spotOn !== false) {
-          // shielded fixture: a whisper of halo, fading as the lens tilts away
+          // shielded fixture: a whisper of halo, fading as the lens tilts away — and
+          // drowned out by daylight like every other emitted glow in the scene
           ctx.globalCompositeOperation = 'lighter';
-          var briG = Math.max(0.1, (P.fogBri == null ? 80 : P.fogBri) / 100);
+          var briG = Math.max(0.1, (P.fogBri == null ? 80 : P.fogBri) / 100) * (1 - 0.75 * sdayF);
           var lrx = Math.max(1.5, pr2[2] * CR);
           var sg = ctx.createRadialGradient(pr2[0], pr2[1], 0, pr2[0], pr2[1], lrx * 1.7);
           sg.addColorStop(0, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',' + (0.16 * briG * lensF).toFixed(3) + ')');
