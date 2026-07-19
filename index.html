@@ -1729,6 +1729,12 @@
         proj(pX + Dx * TH / 2, fg.cy * pe.h, pZ + Dz * TH / 2, pr2)) {
       gapPx = Math.hypot(pr2[0] - pr[0], pr2[1] - pr[1]) / (SLC - 1);
     }
+    // THE invariant: the slice construction must never be resolvable. The per-slice shading
+    // gradient may only exist while the slices land on the same pixels — the moment they fan
+    // apart on screen (oblique view, close-up, overhead), every layer would get its own
+    // readable tone, so the gradient fades to one uniform colour and the 21 outlines fuse
+    // into a single solid silhouette. gapPx is exactly that screen-space fan-out.
+    var fuse = Math.max(steep, Math.min(1, gapPx / 1.5));
     var order = [];
     for (var k = 0; k < SLC; k++) {
       var tau = (k / (SLC - 1)) * 2 - 1, dz = (TH / 2) * tau;
@@ -1747,7 +1753,7 @@
       // properly and the depth faces round off. Face-on (steep = 0) this is exactly zero.
       var scT = 1 - steep * steep * 0.15 * edgeT;
       var lt = 24 + 22 * (si / (SLC - 1));
-      lt = 35 + (lt - 35) * (1 - steep);   // steep view -> uniform colour, slices fuse solid
+      lt = 35 + (lt - 35) * (1 - fuse);   // slices fanned apart -> uniform colour, fuse solid
       ctx.fillStyle = 'rgb(' + ((lt * 0.82) | 0) + ',' + ((lt * 1.02 + 6) | 0) + ',' + ((lt * 1.1 + 9) | 0) + ')';
       ctx.beginPath();
       for (var li = 0; li < fg.loops.length; li++) {
