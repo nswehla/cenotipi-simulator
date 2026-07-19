@@ -1699,7 +1699,13 @@
     var bad = false;
     for (var si = 0; si < SLC && !bad; si++) {
       var tau2 = order[si][0], dz2 = order[si][1];
-      var ins = rN * (1 - Math.sqrt(Math.max(0, 1 - tau2 * tau2)));
+      var edgeT = 1 - Math.sqrt(Math.max(0, 1 - tau2 * tau2));   // 0 mid-depth -> 1 at the faces
+      var ins = rN * edgeT;
+      // the normal-inset can't shrink features thinner than itself (hands, arms), so from
+      // overhead the slab's front/back faces stayed sharp full-width outline cards. From
+      // steep views the outer slices ALSO scale toward the body centre — thin features taper
+      // properly and the depth faces round off. Face-on (steep = 0) this is exactly zero.
+      var scT = 1 - steep * steep * 0.15 * edgeT;
       var lt = 24 + 22 * (si / (SLC - 1));
       lt = 35 + (lt - 35) * (1 - steep);   // steep view -> uniform colour, slices fuse solid
       ctx.fillStyle = 'rgb(' + ((lt * 0.82) | 0) + ',' + ((lt * 1.02 + 6) | 0) + ',' + ((lt * 1.1 + 9) | 0) + ')';
@@ -1707,8 +1713,8 @@
       for (var li = 0; li < fg.loops.length; li++) {
         var loop = fg.loops[li], nrm = fg.norms[li], started = false;
         for (var q = 0; q < loop.length; q++) {
-          var ox = (loop[q][0] + nrm[q][0] * ins) * pe.h;
-          var oy = (loop[q][1] + nrm[q][1] * ins) * pe.h + 0.02;
+          var ox = ((loop[q][0] + nrm[q][0] * ins - fg.cx) * scT + fg.cx) * pe.h;
+          var oy = ((loop[q][1] + nrm[q][1] * ins - fg.cy) * scT + fg.cy) * pe.h + 0.02;
           if (!proj(pX + rgx * ox + Dx * dz2, oy, pZ + rgz * ox + Dz * dz2, pr)) { bad = true; break; }
           if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
         }
