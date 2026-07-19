@@ -1876,37 +1876,32 @@
     g.addColorStop(0, 'rgb(' + lerpC(7, 52) + ',' + lerpC(13, 80) + ',' + lerpC(17, 98) + ')');
     g.addColorStop(1, 'rgb(' + lerpC(11, 56) + ',' + lerpC(18, 82) + ',' + lerpC(14, 66) + ')');
     ctx.fillStyle = g; ctx.fillRect(0, 0, Wpx, Hpx);
-    // ALL spikes pre-draw against the sky from EVERY camera — the opaque floor, canvas, and
-    // everything else then occludes them naturally, leaving them visible only past the
-    // silhouette and through the smoke hole. From overhead the floor swallows them (they're
-    // interior clutter in a plan view); solid mode repaints the near-side spray after the
-    // wall pass since there it's real exterior wood sitting in front of opaque fabric.
-    for (var spk = 0; spk < NPOLES; spk++) drawPoleSpike(spk, 'rgba(99,78,53,0.95)');
-
-    // dirt apron around the tipi: stacked translucent discs accumulate toward the tipi edge.
-    // Faded by CAMERA HEIGHT (not orbit angle): gone the moment the camera passes below the
-    // floor plane — nothing on the ground layer ever shows in a view up through the floor.
-    var groundFade = Math.max(0, Math.min(1, C[1] / 1.2));
-    if (groundFade > 0.01) {
-      // brown packed earth, near-solid at the wall, gone by ~4 ft. 24 rings on a quadratic
-      // alpha ramp — the outermost ring is nearly invisible, so the dropoff reads as one
-      // smooth gradient instead of stepped bands.
-      for (var db = 0; db < 24; db++) {
-        ctx.fillStyle = 'rgba(' + lerpC(60, 176) + ',' + lerpC(47, 142) + ',' + lerpC(34, 104) + ',' +
-                        (0.28 * Math.pow((db + 1) / 24, 2) * groundFade).toFixed(4) + ')';
-        var drr3 = R + 4 - db * (4 / 24);   // 4 ft apron, fully faded by its outer edge
-        ctx.beginPath();
-        var okD = false;
-        for (i = 0; i <= 44; i++) {
-          var da2 = i / 44 * Math.PI * 2;
-          if (proj(drr3 * Math.sin(da2), 0, drr3 * Math.cos(da2), pr)) {
-            if (!okD) { ctx.moveTo(pr[0], pr[1]); okD = true; } else ctx.lineTo(pr[0], pr[1]);
-          }
+    // dirt apron around the tipi: brown packed earth, near-solid at the wall, gone by ~4 ft.
+    // 24 rings on a quadratic alpha ramp — the outermost ring is nearly invisible, so the
+    // dropoff reads as one smooth gradient instead of stepped bands. Drawn FIRST, straight
+    // onto the sky, and kept in every view including under grade: it's the scene's backdrop,
+    // and everything above it (spray included) paints over it, so it can never block.
+    for (var db = 0; db < 24; db++) {
+      ctx.fillStyle = 'rgba(' + lerpC(60, 176) + ',' + lerpC(47, 142) + ',' + lerpC(34, 104) + ',' +
+                      (0.28 * Math.pow((db + 1) / 24, 2)).toFixed(4) + ')';
+      var drr3 = R + 4 - db * (4 / 24);   // 4 ft apron, fully faded by its outer edge
+      ctx.beginPath();
+      var okD = false;
+      for (var i = 0; i <= 44; i++) {
+        var da2 = i / 44 * Math.PI * 2;
+        if (proj(drr3 * Math.sin(da2), 0, drr3 * Math.cos(da2), pr)) {
+          if (!okD) { ctx.moveTo(pr[0], pr[1]); okD = true; } else ctx.lineTo(pr[0], pr[1]);
         }
-        ctx.closePath();
-        if (okD) ctx.fill();
       }
+      ctx.closePath();
+      if (okD) ctx.fill();
     }
+    // ALL spikes pre-draw right after the ground layer, from EVERY camera — the opaque floor,
+    // canvas, and everything else then occludes them naturally, leaving them visible only
+    // past the silhouette and through the smoke hole. From overhead the floor swallows them
+    // (they're interior clutter in a plan view); solid mode repaints the near-side spray
+    // after the wall pass since there it's real exterior wood in front of opaque fabric.
+    for (var spk = 0; spk < NPOLES; spk++) drawPoleSpike(spk, 'rgba(99,78,53,0.95)');
 
     // ground disc — ONLY when the camera is above the floor plane. From underneath the whole
     // floor layer stays hidden, so looking up through it (and through the door/smoke-hole
