@@ -1886,9 +1886,10 @@
     // fade out with distance; hidden once the camera dips below ground (like the mats)
     var groundFade = Math.max(0, Math.min(1, 1 + cam.el / 0.2));
     if (groundFade > 0.01) {
-      ctx.fillStyle = 'rgba(' + lerpC(30, 124) + ',' + lerpC(24, 101) + ',' + lerpC(16, 72) + ',' + (0.16 * groundFade).toFixed(3) + ')';
+      // beige packed earth: the stack goes near-solid within a foot of the wall, gone by ~4 ft
+      ctx.fillStyle = 'rgba(' + lerpC(64, 196) + ',' + lerpC(56, 178) + ',' + lerpC(44, 148) + ',' + (0.3 * groundFade).toFixed(3) + ')';
       for (var db = 0; db < 10; db++) {
-        var drr3 = R + 6 - db * 0.6;   // 6 ft apron, fully faded by its outer edge
+        var drr3 = R + 4 - db * 0.4;   // 4 ft apron, fully faded by its outer edge
         ctx.beginPath();
         var okD = false;
         for (i = 0; i <= 44; i++) {
@@ -1964,6 +1965,24 @@
     // canvas: night weave -> daylight/backlight glowing warm through the fabric
     var cvR = 56 + (232 - 56) * dayF, cvG = 59 + (214 - 59) * dayF, cvB = 50 + (170 - 50) * dayF;
     var nY = (R - HOLE_R) / H; // upward tilt of the cone's outward surface normal
+    // far-side door: a REAL opening — clipped OUT of the back-wall facets and wash, so the
+    // pre-drawn world behind it (sky, apron, the pole spray) genuinely shows through the
+    // doorway. From inside you see outside through the open door, not a painted stand-in.
+    var dcx = coneR(2) * Math.sin(DOOR_A), dcz = coneR(2) * Math.cos(DOOR_A);
+    var farDoor = null;
+    if (Math.sin(DOOR_A) * (C[0] - dcx) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - dcz) < 0) {
+      var fdp = doorPts24();
+      if (fdp.length > 8) farDoor = fdp;
+    }
+    if (farDoor) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Wpx, Hpx);
+      ctx.moveTo(farDoor[0][0], farDoor[0][1]);
+      for (i = 1; i < farDoor.length; i++) ctx.lineTo(farDoor[i][0], farDoor[i][1]);
+      ctx.closePath();
+      ctx.clip('evenodd');   // paint the back wall everywhere EXCEPT the open door
+    }
     for (i = 0; i < NPOLES; i++) {
       var a1 = i / NPOLES * Math.PI * 2 + 0.12, a2 = (i + 1) / NPOLES * Math.PI * 2 + 0.12;
       var am = (a1 + a2) / 2;
@@ -2058,20 +2077,14 @@
       ctx.restore();
     }
 
-    // far-side door (on the back wall, behind the interior — the near-side door draws in the
-    // ghost/solid late passes on top). Always open: through it you see the outside.
-    var dcx = coneR(2) * Math.sin(DOOR_A), dcz = coneR(2) * Math.cos(DOOR_A);
-    var dFacing = Math.sin(DOOR_A) * (C[0] - dcx) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - dcz);
-    if (dFacing < 0) {
-      var dpts = doorPts24();
-      if (dpts.length > 8) {
-        ctx.beginPath();
-        ctx.moveTo(dpts[0][0], dpts[0][1]);
-        for (i = 1; i < dpts.length; i++) ctx.lineTo(dpts[i][0], dpts[i][1]);
-        ctx.closePath();
-        ctx.fillStyle = 'rgb(' + lerpC(8, 96) + ',' + lerpC(10, 132) + ',' + lerpC(9, 118) + ')'; ctx.fill();
-        ctx.strokeStyle = 'rgba(150,160,150,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
-      }
+    // lift the far-door clip and outline the opening (the hole itself stays see-through)
+    if (farDoor) {
+      ctx.restore();
+      ctx.beginPath();
+      ctx.moveTo(farDoor[0][0], farDoor[0][1]);
+      for (i = 1; i < farDoor.length; i++) ctx.lineTo(farDoor[i][0], farDoor[i][1]);
+      ctx.closePath();
+      ctx.strokeStyle = 'rgba(150,160,150,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
     }
 
     // interior poles hug the canvas, so every back-facing pole is behind ALL room content —
