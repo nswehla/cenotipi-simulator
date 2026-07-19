@@ -1696,12 +1696,17 @@
       ctx.fillStyle = col; ctx.fill('evenodd');
       ctx.strokeStyle = col; ctx.lineWidth = sealPx; ctx.lineJoin = 'round'; ctx.stroke();
     }
-    // three flat tones — far face darkest, side band mid, near face lightest. One tone per
-    // surface means no view can ever resolve construction layers; face-on the side band is
-    // edge-on (a hairline contour), and tilted views show it as the slab's honest edge.
-    figFace(FA, 'rgb(21,32,37)');
-    ctx.fillStyle = 'rgb(26,38,44)'; ctx.strokeStyle = 'rgb(26,38,44)';
-    ctx.lineWidth = 0.75; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // ONE colour for faces and side walls alike. Distinct per-surface tones — like the old
+    // per-slice gradient before them — read as sandwich layers the moment a steep view
+    // separates the faces on screen. A single tone makes every piece of the extrusion
+    // indistinguishable: from anywhere the figure is exactly one solid silhouette.
+    var FIG_COL = 'rgb(28,40,46)';
+    figFace(FA, FIG_COL);
+    ctx.fillStyle = FIG_COL; ctx.strokeStyle = FIG_COL;
+    // side walls stroke at the SAME width as the face seal-strokes: the whole solid dilates
+    // uniformly, faces stay flush with the edge band (unequal widths read as an ice-cream
+    // sandwich from steep views — two overhanging boards around a recessed middle)
+    ctx.lineWidth = sealPx; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     for (li = 0; li < FA.length; li++) {
       var LA = FA[li], LB = FB[li], n2 = LA.length;
       for (q = 0; q < n2; q++) {
@@ -1712,7 +1717,7 @@
         ctx.closePath(); ctx.fill(); ctx.stroke();   // stroke seals AA seams between quads
       }
     }
-    figFace(FB, 'rgb(31,44,51)');
+    figFace(FB, FIG_COL);
     // height label worn on the chest (~72% of height; less for big-headed kids/toddlers),
     // centred on the body's actual visual middle (stances aren't symmetric about the anchor)
     var lcx = (fg.cx || 0) * pe.h;
