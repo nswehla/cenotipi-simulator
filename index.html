@@ -2369,13 +2369,6 @@
           }
           ctx.restore();
         }
-        // 2) near-side spikes sit ABOVE the canvas, between it and an ABOVE-GROUND camera —
-        //    repaint them (below-ground cameras use the pre-draw + occlusion path instead)
-        if (C[1] > 0.5) for (i = 0; i < NPOLES; i++) {
-          var pw = poles[i];
-          var pwF = Math.sin(pw.a) * (C[0] - pw.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pw.a) * (C[2] - pw.b[2]);
-          if (pwF >= 0) drawPoleSpike(i, 'rgba(99,78,53,0.95)');
-        }
       }
     } else if (!P.hideFront) {
       // ghost front: a REAL low-alpha fabric fill over the near facets, with the doorway
@@ -2463,6 +2456,19 @@
           ctx.closePath();
           ctx.strokeStyle = 'rgba(160,172,164,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
         }
+      }
+    }
+
+    // near-side pole spikes are EXTERIOR wood in front of the front fabric in EVERY wall
+    // mode — repaint them after the wall passes. Pre-draw + occlusion alone swallowed the
+    // front spikes wherever the twist carried them across the fabric, so the spray read
+    // lopsided toward the back poles (all tips lean +2.6 rad; the near ones cross rightward).
+    // Below-ground cameras keep the pure pre-draw + occlusion path.
+    if (C[1] > 0.5 && Math.hypot(C[0], C[2]) > coneR(Math.max(0, Math.min(C[1], H)))) {
+      for (i = 0; i < NPOLES; i++) {
+        var pwr = poles[i];
+        var pwrF = Math.sin(pwr.a) * (C[0] - pwr.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pwr.a) * (C[2] - pwr.b[2]);
+        if (pwrF >= 0) drawPoleSpike(i, 'rgba(99,78,53,0.95)');
       }
     }
 
