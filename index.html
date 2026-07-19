@@ -917,6 +917,32 @@
         }
         f.norms.push(nm);
       }
+      // per-vertex SAFE inset: distance along the inward normal to the outline's far side
+      // (ray-cast against every segment of every loop). Features thinner than the slab's
+      // edge-rounding inset — hands, arms — otherwise flip inside-out when offset, drawing
+      // garbled doubled silhouettes; each vertex may inset at most ~45% of its local width.
+      f.inmaxs = [];
+      for (li = 0; li < f.loops.length; li++) {
+        var Lm = f.loops[li], nmL = f.norms[li], nn = Lm.length, mx = [];
+        for (i = 0; i < nn; i++) {
+          var Px = Lm[i][0], Py = Lm[i][1], Nx = nmL[i][0], Ny = nmL[i][1], best = 1;
+          for (var lj = 0; lj < f.loops.length; lj++) {
+            var Ls = f.loops[lj], ns = Ls.length;
+            for (var sj = 0; sj < ns; sj++) {
+              if (lj === li && (sj === i || (sj + 1) % ns === i)) continue;
+              var Ax = Ls[sj][0], Ay = Ls[sj][1];
+              var dx2 = Ls[(sj + 1) % ns][0] - Ax, dy2 = Ls[(sj + 1) % ns][1] - Ay;
+              var den = Nx * dy2 - Ny * dx2;
+              if (Math.abs(den) < 1e-9) continue;
+              var tt2 = ((Ax - Px) * dy2 - (Ay - Py) * dx2) / den;
+              var uu = ((Ax - Px) * Ny - (Ay - Py) * Nx) / den;
+              if (tt2 > 1e-4 && uu >= 0 && uu <= 1 && tt2 < best) best = tt2;
+            }
+          }
+          mx.push(best * 0.45);
+        }
+        f.inmaxs.push(mx);
+      }
     }
   })();
 
@@ -1711,10 +1737,11 @@
       ctx.fillStyle = 'rgb(' + ((lt * 0.82) | 0) + ',' + ((lt * 1.02 + 6) | 0) + ',' + ((lt * 1.1 + 9) | 0) + ')';
       ctx.beginPath();
       for (var li = 0; li < fg.loops.length; li++) {
-        var loop = fg.loops[li], nrm = fg.norms[li], started = false;
+        var loop = fg.loops[li], nrm = fg.norms[li], imx = fg.inmaxs[li], started = false;
         for (var q = 0; q < loop.length; q++) {
-          var ox = ((loop[q][0] + nrm[q][0] * ins - fg.cx) * scT + fg.cx) * pe.h;
-          var oy = ((loop[q][1] + nrm[q][1] * ins - fg.cy) * scT + fg.cy) * pe.h + 0.02;
+          var insQ = ins < imx[q] ? ins : imx[q];   // never inset past the local half-width
+          var ox = ((loop[q][0] + nrm[q][0] * insQ - fg.cx) * scT + fg.cx) * pe.h;
+          var oy = ((loop[q][1] + nrm[q][1] * insQ - fg.cy) * scT + fg.cy) * pe.h + 0.02;
           if (!proj(pX + rgx * ox + Dx * dz2, oy, pZ + rgz * ox + Dz * dz2, pr)) { bad = true; break; }
           if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
         }
