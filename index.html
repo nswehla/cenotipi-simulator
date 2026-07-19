@@ -2154,6 +2154,7 @@
     // poles and vines in front of it occlude it correctly (it's a waterfall, not screen haze)
     if (P.fog && fogP.length) solids.push([cdepth(0, HOLE_H - (P.fogLen || 6) * 0.5, 0), 5, 0]);
     if (P.fog) solids.push([cdepth(0.55, 0.6, 0.35), 8, 0]);   // the physical spotlight fixture
+    if (P.fog) solids.push([cdepth(0, HOLE_H - FOG_TOP * 0.5, 0), 9, 0]);   // the emitter can
     if (ropeP) for (i = 0; i < NPOLES; i++) {
       var rma = i * ropeP.rstep + 0.12 + ropeP.rstep / 2;
       solids.push([cdepth(ropeP.rm * Math.sin(rma), ropeP.hm, ropeP.rm * Math.cos(rma)), 6, i]);
@@ -2174,11 +2175,13 @@
       else if (kind === 5) drawFogLayer();
       else if (kind === 6) drawRopeBay(idx);
       else if (kind === 7) drawLedString(idx);
-      else drawSpotlight();
+      else if (kind === 8) drawSpotlight();
+      else drawFogEmitter();
     }
 
-    // fog emitter: a short ~8in can hung at the smoke hole; fog spills from its base
-    if (P.fog) {
+    // fog emitter: a short ~8in can hung at the smoke hole; fog spills from its base.
+    // Depth-sorted (kind 9) so vines/fog/strings in front of it correctly cover it.
+    function drawFogEmitter() {
       var er = Math.max(0.05, (P.fogSize || 8) / 24), eTopY = HOLE_H, eBotY = HOLE_H - FOG_TOP;
       var eN = 22, eTop = [], eBot = [], eok = true;
       for (var ee = 0; ee <= eN; ee++) {
