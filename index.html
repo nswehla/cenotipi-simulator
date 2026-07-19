@@ -762,6 +762,30 @@
     out[2] = s;
     return true;
   }
+  // fill a world-space polygon, properly CLIPPED against the near plane (Sutherland-Hodgman)
+  // instead of skipped when a vertex falls behind it — the reliable way to draw wall quads
+  // that straddle the plane behind an interior camera. Uses the current fillStyle.
+  function fillClippedQuad(q) {
+    var outPts = [], n = q.length, i, planeZ = nearZ + 1e-4;
+    for (i = 0; i < n; i++) {
+      var a = q[i], b = q[(i + 1) % n];
+      var za = (a[0] - C[0]) * bF[0] + (a[1] - C[1]) * bF[1] + (a[2] - C[2]) * bF[2];
+      var zb = (b[0] - C[0]) * bF[0] + (b[1] - C[1]) * bF[1] + (b[2] - C[2]) * bF[2];
+      var ain = za >= planeZ, bin = zb >= planeZ;
+      if (ain) outPts.push(a);
+      if (ain !== bin) {
+        var t = (planeZ - za) / (zb - za);
+        outPts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+      }
+    }
+    if (outPts.length < 3) return;
+    ctx.beginPath();
+    for (i = 0; i < outPts.length; i++) {
+      if (!proj(outPts[i][0], outPts[i][1], outPts[i][2], pr)) return;   // paranoia: all are in front
+      if (i) ctx.lineTo(pr[0], pr[1]); else ctx.moveTo(pr[0], pr[1]);
+    }
+    ctx.closePath(); ctx.fill();
+  }
 
   // ---- seeded rng ----
   function mulberry32(a) {
@@ -2044,20 +2068,19 @@
       // widen each facet a hair angularly so neighbouring bays overlap — kills the
       // anti-aliased hairline seam between panels (~1 in of fabric, invisible)
       var a1e = a1 - 0.01, a2e = a2 + 0.01;
+      // fully opaque from the inside — nothing shows through the fabric
+      ctx.fillStyle = 'rgb(' + ((cvR * lit) | 0) + ',' + ((cvG * lit) | 0) + ',' + ((cvB * lit) | 0) + ')';
       for (var seg = 0; seg < 5; seg++) {
-        // slight overlap between slices hides seams — no strokes, so no horizontal lines
+        // slight overlap between slices hides seams — no strokes, so no horizontal lines.
+        // Slices straddling the near plane get CLIPPED, not skipped: dropping a slice when
+        // any corner fell behind the camera punched apron-coloured holes in the wall when
+        // looking steeply up from inside.
         var fy0 = HOLE_H * seg / 5 - (seg ? 0.06 : 0), fy1 = HOLE_H * (seg + 1) / 5;
         var fr0 = coneR(Math.max(0, fy0)), fr1 = coneR(fy1);
-        if (!(proj(fr0 * Math.sin(a1e), fy0, fr0 * Math.cos(a1e), pr) &&
-              proj(fr0 * Math.sin(a2e), fy0, fr0 * Math.cos(a2e), pr2) &&
-              proj(fr1 * Math.sin(a2e), fy1, fr1 * Math.cos(a2e), pr3) &&
-              proj(fr1 * Math.sin(a1e), fy1, fr1 * Math.cos(a1e), pr4))) continue;
-        ctx.beginPath();
-        ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]);
-        ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
-        // fully opaque from the inside — nothing shows through the fabric
-        ctx.fillStyle = 'rgb(' + ((cvR * lit) | 0) + ',' + ((cvG * lit) | 0) + ',' + ((cvB * lit) | 0) + ')';
-        ctx.fill();
+        fillClippedQuad([[fr0 * Math.sin(a1e), fy0, fr0 * Math.cos(a1e)],
+                         [fr0 * Math.sin(a2e), fy0, fr0 * Math.cos(a2e)],
+                         [fr1 * Math.sin(a2e), fy1, fr1 * Math.cos(a2e)],
+                         [fr1 * Math.sin(a1e), fy1, fr1 * Math.cos(a1e)]]);
       }
     }
     // LED wash tints the far canvas surface: painted directly onto the wall, beneath the whole
