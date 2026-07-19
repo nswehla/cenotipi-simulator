@@ -1886,10 +1886,13 @@
     // fade out with distance; hidden once the camera dips below ground (like the mats)
     var groundFade = Math.max(0, Math.min(1, 1 + cam.el / 0.2));
     if (groundFade > 0.01) {
-      // beige packed earth: the stack goes near-solid within a foot of the wall, gone by ~4 ft
-      ctx.fillStyle = 'rgba(' + lerpC(64, 196) + ',' + lerpC(56, 178) + ',' + lerpC(44, 148) + ',' + (0.3 * groundFade).toFixed(3) + ')';
-      for (var db = 0; db < 10; db++) {
-        var drr3 = R + 4 - db * 0.4;   // 4 ft apron, fully faded by its outer edge
+      // brown packed earth, near-solid at the wall, gone by ~4 ft. 24 rings on a quadratic
+      // alpha ramp — the outermost ring is nearly invisible, so the dropoff reads as one
+      // smooth gradient instead of stepped bands.
+      for (var db = 0; db < 24; db++) {
+        ctx.fillStyle = 'rgba(' + lerpC(60, 176) + ',' + lerpC(47, 142) + ',' + lerpC(34, 104) + ',' +
+                        (0.28 * Math.pow((db + 1) / 24, 2) * groundFade).toFixed(4) + ')';
+        var drr3 = R + 4 - db * (4 / 24);   // 4 ft apron, fully faded by its outer edge
         ctx.beginPath();
         var okD = false;
         for (i = 0; i <= 44; i++) {
@@ -2383,31 +2386,68 @@
     var sB = proj(mx - sdx * rr, my, mz - sdz * rr, pr3) ? pr3[2] : 0;
     var farSide = sA < sB ? 1 : -1;                            // smaller projected scale = farther
     yokeLeg(farSide);
-    ctx.lineCap = 'butt';
-    ctx.strokeStyle = '#23282b';
-    ctx.lineWidth = Math.max(2.5, pr[2] * 0.5);
-    ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
-    yokeLeg(-farSide);
-    // lens + glow in the spotlight colour (dark lens, no glow, when the spotlight is off)
-    var lrx = Math.max(1.5, pr2[2] * 0.22);
-    if (P.spotOn === false) {
-      ctx.fillStyle = '#2b3033';
-      ctx.beginPath(); ctx.ellipse(pr2[0], pr2[1], lrx, lrx * 0.55, 0, 0, Math.PI * 2); ctx.fill();
-      return;
+    // the can: a REAL 3D cylinder — 16 shaded wall quads plus true end discs, so it reads
+    // as a solid body from every angle (the old thick-stroke body collapsed seen end-on)
+    var dxA = x1 - bx, dyA = y1 - 0.05, dzA = z1 - bz;
+    var dl = Math.hypot(dxA, dyA, dzA); dxA /= dl; dyA /= dl; dzA /= dl;
+    var ux = sdx, uz = sdz;                                    // side vector (already unit, ⊥ axis lean)
+    var vx2 = -uz * dyA, vy2 = uz * dxA - ux * dzA, vz2 = ux * dyA;   // u × axis: second circle axis
+    var CR = 0.25, CN = 16, bot = [], topR = [], cok = true;
+    for (var ck = 0; ck <= CN; ck++) {
+      var ca = ck / CN * Math.PI * 2, co = Math.cos(ca) * CR, si = Math.sin(ca) * CR;
+      var ox = ux * co + vx2 * si, oy = vy2 * si, oz = uz * co + vz2 * si;
+      if (proj(bx + ox, 0.05 + oy, bz + oz, pr3) && proj(x1 + ox, y1 + oy, z1 + oz, pr4)) {
+        bot.push([pr3[0], pr3[1]]); topR.push([pr4[0], pr4[1]]);
+      } else { cok = false; break; }
     }
     var fc = P.fogColor || '#cfeef2';
     var fcr = parseInt(fc.substr(1, 2), 16), fcg = parseInt(fc.substr(3, 2), 16), fcb = parseInt(fc.substr(5, 2), 16);
-    ctx.fillStyle = fc;
-    ctx.beginPath(); ctx.ellipse(pr2[0], pr2[1], lrx, lrx * 0.55, 0, 0, Math.PI * 2); ctx.fill();
-    // shielded fixture: just a whisper of halo at the lens, no spillover
-    ctx.globalCompositeOperation = 'lighter';
-    var briG = Math.max(0.1, (P.fogBri == null ? 80 : P.fogBri) / 100);
-    var sg = ctx.createRadialGradient(pr2[0], pr2[1], 0, pr2[0], pr2[1], lrx * 1.7);
-    sg.addColorStop(0, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',' + (0.16 * briG).toFixed(3) + ')');
-    sg.addColorStop(1, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',0)');
-    ctx.fillStyle = sg;
-    ctx.fillRect(pr2[0] - lrx * 1.7, pr2[1] - lrx * 1.7, lrx * 3.4, lrx * 3.4);
-    ctx.globalCompositeOperation = 'source-over';
+    if (cok) {
+      for (var pass = 0; pass < 2; pass++) {                   // back-facing quads first
+        for (ck = 0; ck < CN; ck++) {
+          var cam2 = (ck + 0.5) / CN * Math.PI * 2, co2 = Math.cos(cam2) * CR, si2 = Math.sin(cam2) * CR;
+          var nx = ux * co2 + vx2 * si2, ny = vy2 * si2, nz = uz * co2 + vz2 * si2;
+          var qx = (bx + x1) / 2 + nx, qy = (0.05 + y1) / 2 + ny, qz = (bz + z1) / 2 + nz;
+          var qd = Math.hypot(C[0] - qx, C[1] - qy, C[2] - qz) || 1;
+          var cf = (nx * (C[0] - qx) + ny * (C[1] - qy) + nz * (C[2] - qz)) / (CR * qd);
+          if ((pass === 0) !== (cf < 0)) continue;
+          var lum = Math.max(0, cf);                           // grazing sides darker: reads round
+          ctx.fillStyle = 'rgb(' + ((26 + 34 * lum) | 0) + ',' + ((29 + 39 * lum) | 0) + ',' + ((31 + 42 * lum) | 0) + ')';
+          ctx.beginPath();
+          ctx.moveTo(bot[ck][0], bot[ck][1]); ctx.lineTo(bot[ck + 1][0], bot[ck + 1][1]);
+          ctx.lineTo(topR[ck + 1][0], topR[ck + 1][1]); ctx.lineTo(topR[ck][0], topR[ck][1]);
+          ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.75; ctx.stroke();   // seal AA seams
+        }
+      }
+      // end discs — each only when its face points at the camera (side-on shows neither).
+      // The lens is the projected TOP RING itself: correct shape/orientation at every angle.
+      var lensF = (dxA * (C[0] - x1) + dyA * (C[1] - y1) + dzA * (C[2] - z1)) /
+                  (Math.hypot(C[0] - x1, C[1] - y1, C[2] - z1) || 1);
+      if (-(dxA * (C[0] - bx) + dyA * (C[1] - 0.05) + dzA * (C[2] - bz)) > 0) {
+        ctx.beginPath(); ctx.moveTo(bot[0][0], bot[0][1]);
+        for (ck = 1; ck <= CN; ck++) ctx.lineTo(bot[ck][0], bot[ck][1]);
+        ctx.closePath(); ctx.fillStyle = '#16191b'; ctx.fill();
+      }
+      if (lensF > 0) {
+        ctx.beginPath(); ctx.moveTo(topR[0][0], topR[0][1]);
+        for (ck = 1; ck <= CN; ck++) ctx.lineTo(topR[ck][0], topR[ck][1]);
+        ctx.closePath(); ctx.fillStyle = P.spotOn === false ? '#2b3033' : fc; ctx.fill();
+        if (P.spotOn !== false) {
+          // shielded fixture: a whisper of halo, fading as the lens tilts away
+          ctx.globalCompositeOperation = 'lighter';
+          var briG = Math.max(0.1, (P.fogBri == null ? 80 : P.fogBri) / 100);
+          var lrx = Math.max(1.5, pr2[2] * CR);
+          var sg = ctx.createRadialGradient(pr2[0], pr2[1], 0, pr2[0], pr2[1], lrx * 1.7);
+          sg.addColorStop(0, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',' + (0.16 * briG * lensF).toFixed(3) + ')');
+          sg.addColorStop(1, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',0)');
+          ctx.fillStyle = sg;
+          ctx.fillRect(pr2[0] - lrx * 1.7, pr2[1] - lrx * 1.7, lrx * 3.4, lrx * 3.4);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      }
+    }
+    yokeLeg(-farSide);
   }
 
   // fog waterfall, drawn at its depth inside the solids pass: people/poles/vines nearer the
