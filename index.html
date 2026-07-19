@@ -1882,10 +1882,13 @@
     // onto the sky, and kept in every view including under grade: it's the scene's backdrop,
     // and everything above it (spray included) paints over it, so it can never block.
     // each ring is a true ANNULUS cut at the tipi wall (evenodd against the shared inner
-    // ring) — the earth stops at the groundcloth and never fills in under the floor
+    // ring) — the earth stops at the groundcloth and never fills in under the floor.
+    // Every ring is an NPOLES-gon on the SAME vertex angles as the canvas facets, so the
+    // apron's inner edge is congruent with the hem chords and the whole gradient follows
+    // the faceted wall shape instead of cutting a smooth circle across it.
     var apIn = [], apOk = true;
-    for (var i = 0; i <= 44; i++) {
-      var daI = i / 44 * Math.PI * 2;
+    for (var i = 0; i <= NPOLES; i++) {
+      var daI = i / NPOLES * Math.PI * 2 + 0.12;
       if (proj(R * Math.sin(daI), 0, R * Math.cos(daI), pr)) apIn.push([pr[0], pr[1]]);
       else { apOk = false; break; }
     }
@@ -1895,8 +1898,8 @@
       var drr3 = R + 4 - db * (4 / 24);   // 4 ft apron, fully faded by its outer edge
       ctx.beginPath();
       var okD = false;
-      for (i = 0; i <= 44; i++) {
-        var da2 = i / 44 * Math.PI * 2;
+      for (i = 0; i <= NPOLES; i++) {
+        var da2 = i / NPOLES * Math.PI * 2 + 0.12;
         if (proj(drr3 * Math.sin(da2), 0, drr3 * Math.cos(da2), pr)) {
           if (!okD) { ctx.moveTo(pr[0], pr[1]); okD = true; } else ctx.lineTo(pr[0], pr[1]);
         }
@@ -1921,8 +1924,10 @@
     if (C[1] > 0.05) {
     ctx.beginPath();
     var first = true;
-    for (var i = 0; i <= 44; i++) {
-      var a = i / 44 * Math.PI * 2;
+    // an NPOLES-gon on the facet vertex angles — the floor edge lands exactly on the hem
+    // chords of the faceted canvas instead of a circle bulging past them mid-bay
+    for (var i = 0; i <= NPOLES; i++) {
+      var a = i / NPOLES * Math.PI * 2 + 0.12;
       if (proj(R * Math.sin(a), 0, R * Math.cos(a), pr)) {
         if (first) { ctx.moveTo(pr[0], pr[1]); first = false; } else ctx.lineTo(pr[0], pr[1]);
       }
