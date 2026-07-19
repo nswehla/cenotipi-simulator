@@ -608,8 +608,8 @@
     </div>
     <div class="grp-label" style="margin: 10px 0 4px;">View</div>
     <div class="btns" style="margin-top: 0;">
-      <button data-view="0.65,-1.45,42">Below</button>
-      <button data-view="0.65,0.24,46">Iso</button>
+      <button data-view="0.884,-1.45,42">Below</button>
+      <button data-view="0.884,0.22,46">Iso</button>
       <button id="vWalk" title="First-person: WASD to walk, drag to look, Esc to exit" aria-label="Walk — first-person view">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="14" cy="2.9" r="2.1" fill="currentColor"/>
@@ -622,8 +622,8 @@
           </g>
         </svg>
       </button>
-      <button data-view="0.65,0.02,5">Center</button>
-      <button data-view="0.65,1.5,40">Top</button>
+      <button data-view="0.884,0.02,5">Center</button>
+      <button data-view="0.884,1.5,40">Top</button>
     </div>
   </div>
 </div>
@@ -689,8 +689,8 @@
   addEventListener('resize', resize);
 
   // ---- camera ----
-  var cam = { az: 0.65, el: 0.24, dist: 46 };
-  var CAM0 = { az: 0.65, el: 0.24, dist: 46 };
+  var cam = { az: 0.884, el: 0.22, dist: 46 };   // default view tuned by nswehla 2026-07-19
+  var CAM0 = { az: 0.884, el: 0.22, dist: 46 };
   var target = [0, 8.2, 0];
   var C = [0, 0, 0], bR = [1, 0, 0], bU = [0, 1, 0], bF = [0, 0, 1], focal = 700;
 
