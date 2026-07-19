@@ -1,0 +1,2862 @@
+<title>Cenotipi Mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Night scene — deliberately single-theme dark: this models the installation after sunset. */
+  :root {
+    --ground0: #070d11;
+    --ground1: #0c1410;
+    --panel: rgba(16, 24, 27, 0.82);
+    --panel-edge: rgba(120, 200, 190, 0.14);
+    --ink: #d9e6e2;
+    --muted: #7e938e;
+    --aqua: #4fd8c4;
+    --amber: #e0a45f;
+    --display: 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+    --ui: system-ui, 'Segoe UI', sans-serif;
+  }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--ground0); }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #scene.dragging { cursor: grabbing; }
+
+  #panel {
+    position: fixed; top: 14px; left: 14px; width: 252px; max-height: calc(100% - 208px);
+    overflow-y: auto; box-sizing: border-box; z-index: 10;
+    display: flex; flex-direction: column; gap: 10px;
+    color: var(--ink); font-family: var(--ui); font-size: 12.5px;
+    scrollbar-width: thin; scrollbar-color: #2e3d3c transparent;
+  }
+  #panel h1 {
+    font-family: var(--display); font-weight: 400; font-size: 19px;
+    letter-spacing: 0.34em; margin: 0; color: var(--ink); text-transform: uppercase;
+  }
+  #panel .sub { color: var(--muted); font-size: 11px; margin: 3px 0 0; letter-spacing: 0.02em; }
+  .grp { margin: 14px 0 0; }
+  .grp-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .row label { flex: 0 0 86px; color: var(--ink); }
+  .row output { flex: 0 0 44px; text-align: right; color: var(--aqua); font-variant-numeric: tabular-nums; }
+  .row output.over { color: #ff6b6b; }   /* asking for more than exists (e.g. LED vines > vines) */
+  /* custom-drawn range sliders: identical in every browser (native accent-color renders
+     engine-specific tracks/thumbs). --p (set from JS) drives the progress fill. */
+  input[type=range] {
+    flex: 1; min-width: 0; height: 18px; margin: 0;
+    -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer;
+    --p: 50%;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--aqua) var(--p), rgba(79, 216, 196, 0.18) var(--p));
+  }
+  input[type=range]::-moz-range-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--aqua) var(--p), rgba(79, 216, 196, 0.18) var(--p));
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--aqua); border: 0; margin-top: -4.5px;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%; background: var(--aqua); border: 0;
+  }
+  /* editable numeric readout beside a slider (tipi dimensions) — no native spinners: the
+     slider handles coarse adjustment, and Firefox's always-on arrows break the look */
+  .row input[type=number].numbox {
+    flex: 0 0 50px; text-align: right; color: var(--aqua);
+    padding: 2px 4px; font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield; appearance: textfield;
+  }
+  .row input[type=number].numbox::-webkit-outer-spin-button,
+  .row input[type=number].numbox::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  /* stepper: down arrow | number | up arrow (replaces the tipi sliders) */
+  .stepper { display: flex; align-items: center; gap: 4px; flex: 1; justify-content: flex-end; }
+  .step-btn {
+    width: 20px; height: 22px; padding: 0; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(79, 216, 196, 0.1); color: var(--aqua);
+    border: 1px solid rgba(79, 216, 196, 0.3); border-radius: 5px; cursor: pointer;
+  }
+  .step-btn:hover { background: rgba(79, 216, 196, 0.2); }
+  .step-btn svg { width: 9px; height: 9px; display: block; }
+  .row .unit { flex: 0 0 14px; color: var(--muted); font-size: 11px; }
+  .row input[type=number] {
+    flex: 1; min-width: 0; background: rgba(79, 216, 196, 0.08); color: var(--ink);
+    border: 1px solid rgba(79, 216, 196, 0.3); border-radius: 5px;
+    padding: 3px 6px; font: 12px var(--ui);
+  }
+  input[type=range]:focus-visible, button:focus-visible, input[type=checkbox]:focus-visible {
+    outline: 2px solid var(--aqua); outline-offset: 2px;
+  }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; }
+  .toggles label.full { grid-column: 1 / -1; }   /* full-width row, no text wrap */
+  .toggles label { display: flex; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--aqua); width: 14px; height: 14px; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .btns button {
+    flex: 1; background: rgba(79, 216, 196, 0.1); color: var(--aqua);
+    border: 1px solid rgba(79, 216, 196, 0.3); border-radius: 6px;
+    font: 12px var(--ui); padding: 6px 0; cursor: pointer; letter-spacing: 0.03em;
+  }
+  .btns button:hover { background: rgba(79, 216, 196, 0.2); }
+  .btns button.on { background: rgba(79, 216, 196, 0.3); border-color: rgba(79, 216, 196, 0.75); }
+  #vWalk { display: flex; align-items: center; justify-content: center; }
+  #vWalk svg { width: 19px; height: 19px; display: block; }
+  /* one stat per line: label left, value right */
+  #stats { display: flex; flex-direction: column; gap: 3px; }
+  #stats div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  #stats .v { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+  #stats .v em { font-style: normal; font-size: 10.5px; color: var(--muted); }
+  #stats .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); white-space: nowrap; }
+  .note { margin-top: 9px; font-size: 10px; color: var(--muted); line-height: 1.45; }
+  .note b { color: var(--amber); font-weight: 600; }
+
+  /* right-side panel: Edge rope light + Fog cards (bottom space reserved for the Saves card) */
+  #panelR {
+    position: fixed; top: 14px; right: 14px; width: 252px; max-height: calc(100% - 330px);
+    overflow-y: auto; box-sizing: border-box; z-index: 10;
+    display: flex; flex-direction: column; gap: 10px;
+    scrollbar-width: thin; scrollbar-color: #2e3d3c transparent;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    color: var(--ink); font-family: var(--ui); font-size: 12.5px; padding: 10px 13px 11px;
+  }
+  .card-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink); }
+  /* small square icon button in a card title bar (e.g. reshuffle vines) */
+  /* 22px with a 12px icon + 1px borders = exactly 4px per side — half-pixel gaps (21px)
+     snap unevenly on 1x screens and read as an off-center icon */
+  .icon-btn {
+    width: 22px; height: 22px; padding: 0; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(79, 216, 196, 0.1); color: var(--aqua);
+    border: 1px solid rgba(79, 216, 196, 0.3); border-radius: 6px; cursor: pointer;
+  }
+  .icon-btn:hover { background: rgba(79, 216, 196, 0.2); }
+  .icon-btn svg { width: 12px; height: 12px; display: block; }
+  /* on/off switch built from a checkbox */
+  .sw { position: relative; display: inline-flex; cursor: pointer; }
+  .sw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .sw-track {
+    width: 30px; height: 16px; border-radius: 9px; background: rgba(126, 147, 142, 0.3);
+    border: 1px solid var(--panel-edge); transition: background 0.15s; position: relative;
+  }
+  .sw-track::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s;
+  }
+  .sw input:checked + .sw-track { background: rgba(79, 216, 196, 0.35); }
+  .sw input:checked + .sw-track::after { transform: translateX(14px); background: var(--aqua); }
+  .sw input:focus-visible + .sw-track { outline: 2px solid var(--aqua); outline-offset: 2px; }
+  /* colour swatch box — same 30x22 box as the drip swatch so the two pickers match */
+  .row input[type=color] {
+    flex: 0 0 30px; width: 30px; height: 22px; padding: 0; cursor: pointer;
+    border: 1px solid rgba(79, 216, 196, 0.35); border-radius: 5px; background: transparent;
+  }
+  .row input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .row input[type=color]::-webkit-color-swatch { border: none; border-radius: 4px; }
+  .row input[type=color]::-moz-color-swatch { border: none; border-radius: 4px; }
+  .colnote { flex: 0 0 auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
+  /* mats: segmented icon selector with a sliding highlight */
+  .seg {
+    position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 2px;
+    background: rgba(126, 147, 142, 0.1); border: 1px solid var(--panel-edge); border-radius: 8px; padding: 3px;
+  }
+  .seg-hl {
+    box-sizing: border-box;   /* the 1px borders must live INSIDE the slot width, or the pill
+                                 lands 2px wide of its button and drifts further each slot */
+    position: absolute; top: 3px; left: 3px; bottom: 3px; width: calc((100% - 6px) / 3);
+    background: rgba(79, 216, 196, 0.2); border: 1px solid rgba(79, 216, 196, 0.5); border-radius: 6px;
+    transition: transform 0.22s cubic-bezier(.4, 0, .2, 1); pointer-events: none;
+  }
+  .seg-btn {
+    position: relative; z-index: 1; background: none; border: 0; cursor: pointer; padding: 7px 0;
+    display: flex; align-items: center; justify-content: center; color: var(--muted); transition: color 0.15s;
+  }
+  .seg-btn svg { width: 30px; height: 22px; display: block; }
+  .seg-btn:hover { color: var(--ink); }
+  .seg-btn.on { color: var(--aqua); }
+  .seg-btn:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; border-radius: 6px; }
+  .seg-cap { font-size: 10px; color: var(--muted); margin-top: 8px; text-align: center; }
+  /* LED pattern buttons */
+  .patgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .pat {
+    border: 1px solid rgba(126, 147, 142, 0.35); background: none; color: var(--muted);
+    border-radius: 6px; font: 10.5px var(--ui); padding: 5px 2px; cursor: pointer;
+  }
+  .pat:hover { color: var(--ink); border-color: var(--aqua); }
+  .pat.on { color: var(--aqua); border-color: rgba(79, 216, 196, 0.6); background: rgba(79, 216, 196, 0.14); }
+  .pat:focus-visible { outline: 2px solid var(--aqua); outline-offset: 1px; }
+  /* for-scale figure buttons: a bottom-aligned silhouette lineup */
+  .figrow { display: flex; align-items: stretch; gap: 4px; }
+  .figbtn {
+    flex: 1 1 0; display: flex; align-items: flex-end; justify-content: center;
+    background: none; border: 1px solid transparent; border-radius: 6px; padding: 4px 3px;
+    color: rgba(126, 147, 142, 0.55); cursor: pointer;
+    height: 54px; box-sizing: border-box;   /* uniform buttons; figures keep their own heights */
+  }
+  .figbtn svg { display: block; }
+  .figbtn:hover { color: var(--ink); }
+  .figbtn.on { color: var(--aqua); background: rgba(79, 216, 196, 0.08); border-color: rgba(79, 216, 196, 0.25); }
+  .figbtn:focus-visible { outline: 2px solid var(--aqua); outline-offset: 1px; }
+  @media (prefers-reduced-motion: reduce) { .seg-hl { transition: none; } }
+  /* layout selector: 2-up text segments */
+  #layoutSeg { margin: 2px 0 8px; }
+  .seg-2 { grid-template-columns: repeat(2, 1fr); }
+  .seg-2 .seg-hl { width: calc((100% - 6px) / 2); }
+  .seg-txt { font: 11px var(--ui); letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 0; }
+  /* radial-only vs spiral-only rows toggle with the layout mode */
+  .spiral-only { display: none; }
+  body.layout-spiral .spiral-only { display: block; }
+  body.layout-spiral .radial-only { display: none; }
+
+  /* bottom-right column: Totals + Load Config */
+  #panelBR {
+    position: fixed; right: 14px; bottom: 14px; width: 252px; box-sizing: border-box; z-index: 10;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  /* sub-section inside a card (e.g. Drips inside LED pattern) */
+  .card-sec { margin-top: 10px; border-top: 1px solid var(--panel-edge); padding-top: 9px; }
+  .dripRow { display: flex; align-items: center; gap: 10px; position: relative; }
+  #dripSwatch {
+    width: 30px; height: 22px; border-radius: 5px; cursor: pointer; flex: 0 0 auto;
+    border: 1px solid rgba(79, 216, 196, 0.35); padding: 0;
+  }
+  #dripSwatch:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; }
+  #dripPop {
+    position: absolute; left: 0; bottom: 30px; z-index: 25;
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 9px;
+  }
+  #dripPop[hidden] { display: none; }
+  /* toggle + inline number spinner rows (e.g. Draped vines footage) */
+  .togrow { display: flex; align-items: center; gap: 7px; margin: 6px 0 0; }
+  .togrow label { display: flex; align-items: center; gap: 7px; cursor: pointer; flex: 1; }
+  .togrow input[type=number] {
+    flex: 0 0 56px; background: rgba(79, 216, 196, 0.08); color: var(--ink);
+    border: 1px solid rgba(79, 216, 196, 0.3); border-radius: 5px;
+    padding: 3px 4px; font: 12px var(--ui);
+  }
+  .togrow .unit { color: var(--muted); font-size: 11px; }
+  #dripWheel { width: 88px; height: 88px; border-radius: 50%; cursor: crosshair; display: block; }
+  /* scene bar: bare controls along the bottom of the screen */
+  #sceneBar {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; z-index: 10;
+    color: var(--ink); font-family: var(--ui); font-size: 12.5px;
+  }
+  #sceneBar label { color: var(--muted); }
+  #sceneBar input[type=range] { width: 130px; flex: none; }
+  #sceneBar .dnCap { color: var(--muted); }
+  /* tipi dimensions: bottom-left card */
+  #panelBL { position: fixed; left: 14px; bottom: 14px; width: 252px; box-sizing: border-box; z-index: 10; }
+  #panelBL .hf { display: flex; align-items: center; gap: 7px; margin-top: 8px; cursor: pointer; }
+  /* spiral-only toggle labels inside a .toggles grid: hidden in radial, flex when spiral
+     (outweighs the .toggles label { display:flex } base rule) */
+  .toggles label.spiral-only { display: none; }
+  body.layout-spiral .toggles label.spiral-only { display: flex; }
+  #saveArm, #dlArm {
+    height: 30px; border-radius: 6px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(79, 216, 196, 0.1); color: var(--aqua); border: 1px solid rgba(79, 216, 196, 0.3);
+  }
+  #saveArm svg, #dlArm svg { width: 15px; height: 15px; display: block; }
+  #saveArm:hover, #dlArm:hover { background: rgba(79, 216, 196, 0.2); }
+  #saveArm.armed, #dlArm.armed { background: var(--aqua); color: #10201d; border-color: var(--aqua); }
+  .slots { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .slot {
+    height: 30px; border-radius: 6px; cursor: pointer; font: 12px var(--ui);
+    background: none; border: 1px dashed rgba(126, 147, 142, 0.45); color: var(--muted);
+  }
+  .slot:hover { border-color: var(--aqua); color: var(--ink); }
+  .slot.filled {
+    border: 1px solid rgba(79, 216, 196, 0.5); background: rgba(79, 216, 196, 0.14); color: var(--aqua);
+  }
+  /* armed (save/download): slots pulse to say "now pick one" */
+  @keyframes slotPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 3px rgba(79, 216, 196, 0.25); }
+    50% { transform: scale(1.08); box-shadow: 0 0 9px rgba(79, 216, 196, 0.55); }
+  }
+  .slots.armed .slot { border-color: var(--aqua); animation: slotPulse 1.1s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .slots.armed .slot { animation: none; box-shadow: 0 0 7px rgba(79, 216, 196, 0.45); }
+  }
+  .slot:focus-visible, #saveArm:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; }
+
+  /* confirm popup */
+  #confirmOv {
+    position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+    background: rgba(4, 8, 8, 0.55); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  }
+  #confirmOv[hidden] { display: none; }
+  #confirmBox {
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    color: var(--ink); font-family: var(--ui); font-size: 13px; padding: 18px 20px; max-width: 300px;
+  }
+  #confirmMsg { line-height: 1.5; }
+  #confirmBox .btns { margin-top: 14px; }
+  #confirmYes { background: rgba(79, 216, 196, 0.25); }
+
+  #hint {
+    position: fixed; top: 14px; right: 16px; z-index: 5; color: var(--muted);
+    font: 11px var(--ui); letter-spacing: 0.05em; text-align: right; pointer-events: none;
+  }
+  #panelToggle {
+    display: none; position: fixed; bottom: 14px; left: 14px; z-index: 21;
+    background: var(--panel); color: var(--aqua); border: 1px solid var(--panel-edge);
+    border-radius: 8px; font: 13px var(--ui); padding: 9px 14px; cursor: pointer;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  /* desktop: the wrapper is layout-invisible; every panel keeps its fixed position */
+  #ctrlWrap { display: contents; }
+  @media (max-width: 640px) {
+    #panelToggle { display: block; }
+    /* mobile: Controls owns EVERY card — closed shows just the scene, open is one
+       full-screen scrollable sheet holding all four panel stacks */
+    #ctrlWrap { display: none; }
+    body.ctrlOpen #ctrlWrap {
+      display: flex; flex-direction: column; gap: 10px;
+      position: fixed; left: 0; right: 0; top: 0; bottom: 56px; z-index: 20;
+      overflow-y: auto; padding: 10px;
+      background: rgba(7, 13, 17, 0.93);
+      -webkit-overflow-scrolling: touch;
+    }
+    body.ctrlOpen #ctrlWrap > * {
+      position: static; width: auto; max-height: none; transform: none;
+      display: flex; flex-direction: column; gap: 10px; overflow: visible;
+    }
+    /* sheet order: left stack (…Foam mats) -> Tipi -> LED cards -> Totals/Load Config */
+    #panelBL { order: 1; }
+    #panelR { order: 2; }
+    #panelBR { order: 3; }
+    #sceneBar { bottom: 56px; }
+    #hint { display: none; }
+  }
+</style>
+
+<canvas id="scene" aria-label="3D mockup of the tipi interior with hanging LED strings, vines, and fog"></canvas>
+<div id="hint">drag to orbit &nbsp;&middot;&nbsp; scroll / pinch to zoom</div>
+<button id="panelToggle" aria-expanded="false">Controls</button>
+
+<!-- ctrlWrap: display:contents on desktop (invisible to layout); on mobile it becomes the
+     single scrollable controls sheet that the Controls button shows/hides in full -->
+<div id="ctrlWrap">
+<div id="panel">
+  <div class="card">
+    <h1>Cenotipi</h1>
+    <div class="sub">tipi mockup &mdash; Chillits, Sept 2026</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="card-title">Vines</span>
+      <button type="button" id="shuffle" class="icon-btn" title="Reshuffle vines" aria-label="Reshuffle vines">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+      </button>
+    </div>
+    <div class="seg seg-2" id="layoutSeg">
+      <span class="seg-hl" id="layoutSegHl"></span>
+      <button type="button" class="seg-btn seg-txt" data-layout="radial">Random</button>
+      <button type="button" class="seg-btn seg-txt" data-layout="spiral">Spiral</button>
+    </div>
+    <div class="row radial-only"><label for="vineCount">Vertical vines</label><input type="range" id="vineCount" min="0" max="60" value="24"><output for="vineCount">24</output></div>
+    <div class="row"><label for="lmin">Min length</label><input type="range" id="lmin" min="2" max="14" value="5" step="0.5"><output for="lmin">5 ft</output></div>
+    <div class="row"><label for="lmax">Max length</label><input type="range" id="lmax" min="2" max="14" value="11" step="0.5"><output for="lmax">11 ft</output></div>
+    <div class="row"><label for="hlo">Low attach</label><input type="range" id="hlo" min="4" max="22" value="7" step="0.5"><output for="hlo">7 ft</output></div>
+    <div class="row"><label for="hhi">High attach</label><input type="range" id="hhi" min="4" max="22" value="12" step="0.5"><output for="hhi">12 ft</output></div>
+    <div class="row"><label for="floorGap">Floor gap</label><input type="range" id="floorGap" min="0" max="6" value="1" step="0.25"><output for="floorGap">1 ft</output></div>
+    <div class="row radial-only"><label for="fill">Center fill</label><input type="range" id="fill" min="0" max="100" value="45"><output for="fill">45%</output></div>
+    <div class="spiral-only">
+      <div class="row"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
+      <div class="row"><label for="dropDensity">Drop density</label><input type="range" id="dropDensity" min="0" max="100" value="50"><output for="dropDensity">50%</output></div>
+    </div>
+    <div class="togrow">
+      <label><input type="checkbox" id="vinesDraped" checked> Draped vines</label>
+      <input type="number" id="drapedFt" min="0" max="400" step="10" value="100">
+      <span class="unit">ft</span>
+    </div>
+    <div class="togrow">
+      <label><input type="checkbox" id="vinesOnPoles" checked> Restrict mounting to poles</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-title">Fog</span>
+      <label class="sw" title="Fog on/off"><input type="checkbox" id="fog" checked><span class="sw-track"></span></label>
+    </div>
+    <div class="row"><label for="fogLen">Length</label><input type="range" id="fogLen" min="2" max="15" value="8" step="0.5"><output for="fogLen">8 ft</output></div>
+    <div class="row"><label for="fogSize">Output width</label><input type="range" id="fogSize" min="4" max="24" step="1" value="8"><output for="fogSize">8 in</output></div>
+    <div class="row"><label for="fogStr">Intensity</label><input type="range" id="fogStr" min="10" max="100" value="85"><output for="fogStr">85%</output></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-title">Central spotlight</span>
+      <label class="sw" title="Spotlight on/off"><input type="checkbox" id="spotOn" checked><span class="sw-track"></span></label>
+    </div>
+    <div class="row"><label for="fogBri">Brightness</label><input type="range" id="fogBri" min="0" max="100" value="80"><output for="fogBri">80%</output></div>
+    <div class="row"><label for="fogColor">Color</label><input type="color" id="fogColor" value="#bfe8ef"><span class="colnote">uplit on fog</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="card-title">For scale (tap to toggle)</span></div>
+    <div class="figrow" id="figRow">
+      <input type="checkbox" id="p62" hidden>
+      <input type="checkbox" id="p510" checked hidden>
+      <input type="checkbox" id="p54" checked hidden>
+      <input type="checkbox" id="pKid" hidden>
+      <input type="checkbox" id="pTod" hidden>
+      <input type="checkbox" id="banana" hidden>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-title">Foam mats</span>
+      <label class="sw" title="Mats on/off"><input type="checkbox" id="matsOn" checked><span class="sw-track"></span></label>
+    </div>
+    <div class="seg" id="matSeg">
+      <span class="seg-hl" id="matSegHl"></span>
+      <button type="button" class="seg-btn" data-mat="full" title="Full — packed" aria-label="Full coverage">
+        <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor" transform="skewX(-10) translate(4.51 2.53) scale(1 0.95)">
+          <rect x="6.4" y="0" width="12" height="5.2" rx="1.4"/>
+          <rect x="0" y="6" width="12" height="5.2" rx="1.4"/>
+          <rect x="12.8" y="6" width="12" height="5.2" rx="1.4"/>
+          <rect x="6.4" y="12" width="12" height="5.2" rx="1.4"/>
+        </g></svg>
+      </button>
+      <button type="button" class="seg-btn" data-mat="medium" title="Medium coverage" aria-label="Medium coverage">
+        <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor" transform="skewX(-10) translate(5.1 5.63) scale(1 0.95)">
+          <rect x="6.4" y="0" width="12" height="5.2" rx="1.4"/>
+          <rect x="13.4" y="6" width="12" height="5.2" rx="1.4"/>
+          <rect x="-1.4" y="7.4" width="12" height="5.2" rx="1.4" transform="rotate(-8 4.6 9.8)"/>
+        </g></svg>
+      </button>
+      <button type="button" class="seg-btn" data-mat="sparse" title="Sparse — a few mats" aria-label="Sparse coverage">
+        <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor">
+          <rect x="1" y="7" width="13" height="5.2" rx="1.6" transform="rotate(-25 7.5 9.6)"/>
+          <rect x="16" y="9" width="13" height="5.2" rx="1.6" transform="rotate(25 22.5 11.6)"/>
+        </g></svg>
+      </button>
+    </div>
+    <div class="seg-cap" id="matCap">Medium &middot; tap the active icon to re-shuffle</div>
+  </div>
+</div>
+
+<div id="panelR">
+  <div class="card">
+    <div class="card-hd"><span class="card-title">Vines with LEDs<br>(longest vertical vines)</span></div>
+    <div class="row"><label for="count">LED vines</label><input type="range" id="count" min="0" max="30" value="7"><output for="count">7</output></div>
+    <div class="row"><label for="bri">Brightness</label><input type="range" id="bri" min="15" max="100" value="65"><output for="bri">65%</output></div>
+    <div class="row"><label for="patSpeed">Pattern speed</label><input type="range" id="patSpeed" min="0" max="100" value="50"><output for="patSpeed">1&times;</output></div>
+    <div class="toggles">
+      <label class="full"><input type="checkbox" id="ledStrings" checked> Vertical vine LEDs</label>
+      <label><input type="checkbox" id="lightCast" checked> Light cast</label>
+      <label><input type="checkbox" id="drapedLeds"> Draped LEDs</label>
+      <label class="spiral-only"><input type="checkbox" id="spiralLeds" checked> Spiral LEDs</label>
+    </div>
+    <div class="card-sec">
+      <div class="card-hd"><span class="card-title">Pattern</span></div>
+      <div class="patgrid" id="patGrid"></div>
+    </div>
+    <div class="card-sec">
+      <div class="card-hd">
+        <span class="card-title">Drips (overlay)</span>
+        <label class="sw" title="Drips on/off"><input type="checkbox" id="drips" checked><span class="sw-track"></span></label>
+      </div>
+      <div class="dripRow">
+        <button type="button" id="dripSwatch" aria-label="Drip colour — opens a colour wheel"></button>
+        <div class="seg-cap" style="text-align: left; margin: 0;">drip colour</div>
+        <div id="dripPop" hidden>
+          <canvas id="dripWheel" width="88" height="88" aria-label="Drip colour wheel"></canvas>
+        </div>
+      </div>
+      <div class="row"><label for="dripSpeed">Drip speed</label><input type="range" id="dripSpeed" min="0" max="100" value="50"><output for="dripSpeed">1.0&times;</output></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-title">Edge light</span>
+    </div>
+    <div class="seg" id="edgeSeg">
+      <span class="seg-hl" id="edgeSegHl"></span>
+      <button type="button" class="seg-btn seg-txt" data-edge="rope">Rope</button>
+      <button type="button" class="seg-btn seg-txt" data-edge="led">LEDs</button>
+      <button type="button" class="seg-btn seg-txt" data-edge="off">Off</button>
+    </div>
+    <div class="row"><label for="ropeH">Mount height</label><input type="range" id="ropeH" min="0" max="10" step="0.5" value="0.5"><output for="ropeH">0.5 ft</output></div>
+    <div class="row"><label for="ropeDrape">Rope drape</label><input type="range" id="ropeDrape" min="0" max="5" step="0.25" value="0.25"><output for="ropeDrape">0.25 ft</output></div>
+    <div class="row"><label for="ropeSp">Pixel spacing</label><input type="number" id="ropeSp" min="0.5" max="24" step="0.5" value="1"><output for="ropeSp">1 in</output></div>
+  </div>
+
+</div>
+
+<div id="panelBR">
+  <div class="card">
+    <div class="card-hd"><span class="card-title">Totals</span></div>
+    <div id="stats">
+      <div><span class="k">Pixels</span><span class="v" id="sPx">&mdash;</span></div>
+      <div><span class="k">LED length</span><span class="v" id="sLen">&mdash;</span></div>
+      <div><span class="k">Vine length</span><span class="v" id="sVine">&mdash;</span></div>
+      <div><span class="k">Px / string</span><span class="v" id="sPerStr">&mdash;</span></div>
+      <div><span class="k">Full white</span><span class="v" id="sWMax">&mdash;</span></div>
+      <div><span class="k">@ 30% cap</span><span class="v" id="sWCap">&mdash;</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-title">Load Config</span>
+    </div>
+    <div class="slots" id="saveSlots">
+      <button id="saveArm" type="button" title="Save — then pick a slot" aria-label="Save — then pick a slot">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M2.5 1h8.9L15 4.6v8.9A1.5 1.5 0 0 1 13.5 15h-11A1.5 1.5 0 0 1 1 13.5v-11A1.5 1.5 0 0 1 2.5 1Zm2 1.2h6.5V6H4.5V2.2Zm4.2.8h1.5v2.2H8.7V3ZM3.6 9.6h8.8v4.3H3.6V9.6Z"/></svg>
+      </button>
+      <button type="button" class="slot" data-slot="0">1</button>
+      <button type="button" class="slot" data-slot="1">2</button>
+      <button type="button" class="slot" data-slot="2">3</button>
+      <button type="button" class="slot" data-slot="3">4</button>
+      <button type="button" class="slot" data-slot="4">5</button>
+      <button id="dlArm" type="button" title="Download — then pick a slot" aria-label="Download a save as a text file — then pick a slot">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M8 2v7.2 M4.6 6.2 L8 9.6 L11.4 6.2 M2.5 12.8 h11"/></svg>
+      </button>
+      <button type="button" class="slot" data-slot="5">6</button>
+      <button type="button" class="slot" data-slot="6">7</button>
+      <button type="button" class="slot" data-slot="7">8</button>
+      <button type="button" class="slot" data-slot="8">9</button>
+      <button type="button" class="slot" data-slot="9">10</button>
+    </div>
+    <div class="seg-cap" id="saveCap">Save to a slot, then load it back</div>
+  </div>
+</div>
+
+<div id="panelBL">
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-title">Tipi</span>
+    </div>
+    <div class="row"><label for="tipiHNum">Height</label>
+      <input type="range" id="tipiH" min="10" max="26" value="15" step="0.5" hidden>
+      <div class="stepper">
+        <button type="button" class="step-btn" data-stepfor="tipiH" data-dir="-1" aria-label="Decrease height"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <input type="number" class="numbox" id="tipiHNum" min="10" max="26" step="0.5" value="15" aria-label="Height in feet">
+        <button type="button" class="step-btn" data-stepfor="tipiH" data-dir="1" aria-label="Increase height"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 6.5 L5 3.5 L8 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <span class="unit">ft</span>
+    </div>
+    <div class="row"><label for="tipiDNum">Base diameter</label>
+      <input type="range" id="tipiD" min="10" max="26" value="20" step="0.5" hidden>
+      <div class="stepper">
+        <button type="button" class="step-btn" data-stepfor="tipiD" data-dir="-1" aria-label="Decrease base diameter"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <input type="number" class="numbox" id="tipiDNum" min="10" max="26" step="0.5" value="20" aria-label="Base diameter in feet">
+        <button type="button" class="step-btn" data-stepfor="tipiD" data-dir="1" aria-label="Increase base diameter"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 6.5 L5 3.5 L8 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <span class="unit">ft</span>
+    </div>
+    <div class="row"><label for="tipiPNum">Poles</label>
+      <input type="range" id="tipiP" min="11" max="21" value="15" step="1" hidden>
+      <div class="stepper">
+        <button type="button" class="step-btn" data-stepfor="tipiP" data-dir="-1" aria-label="Fewer poles"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <input type="number" class="numbox" id="tipiPNum" min="11" max="21" step="1" value="15" aria-label="Pole count">
+        <button type="button" class="step-btn" data-stepfor="tipiP" data-dir="1" aria-label="More poles"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 6.5 L5 3.5 L8 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <span class="unit"></span>
+    </div>
+    <div class="grp-label" style="margin: 10px 0 4px;">Visibility</div>
+    <div class="seg" id="wallSeg">
+      <span class="seg-hl" id="wallSegHl"></span>
+      <button type="button" class="seg-btn" data-wall="solid" title="Full tipi — outside visible" aria-label="Full tipi, outside visible">
+        <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor">
+          <path d="M11.5 1 L15 5.4 M18.5 1 L15 5.4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+          <path fill-rule="evenodd" d="M15 4 L27.2 18.4 Q15 23.6 2.8 18.4 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
+        </g></svg>
+      </button>
+      <button type="button" class="seg-btn" data-wall="ghost" title="Front half translucent" aria-label="Front half translucent">
+        <!-- door centered like the full icon; it straddles the seam, so each half punches its
+             own portion of the hole (evenodd + clip to that half) -->
+        <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor">
+          <defs>
+            <clipPath id="wgA"><path d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z"/></clipPath>
+            <clipPath id="wgB"><path d="M15 4 L16.2 21.2 Q22.8 20.7 27.2 18.4 Z"/></clipPath>
+          </defs>
+          <path d="M11.5 1 L15 5.4 M18.5 1 L15 5.4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+          <path clip-path="url(#wgA)" fill-rule="evenodd" d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L17.2 22.6 L12.8 22.6 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
+          <path clip-path="url(#wgB)" fill-rule="evenodd" opacity="0.32" d="M15 4 L16.2 21.2 Q22.8 20.7 27.2 18.4 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L17.2 22.6 L12.8 22.6 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
+          <path d="M15 4 L15.64 13.4" stroke="currentColor" stroke-width="0.8" fill="none" opacity="0.55"/>
+        </g></svg>
+      </button>
+      <button type="button" class="seg-btn" data-wall="open" title="Front half hidden" aria-label="Front half hidden">
+        <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor">
+          <defs>
+            <clipPath id="woA"><path d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z"/></clipPath>
+          </defs>
+          <path d="M11.5 1 L15 5.4 M18.5 1 L15 5.4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+          <path clip-path="url(#woA)" fill-rule="evenodd" d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L17.2 22.6 L12.8 22.6 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
+          <path d="M15 4 L15.64 13.4" stroke="currentColor" stroke-width="0.8" fill="none" opacity="0.55"/>
+        </g></svg>
+      </button>
+    </div>
+    <div class="grp-label" style="margin: 10px 0 4px;">View</div>
+    <div class="btns" style="margin-top: 0;">
+      <button data-view="0.65,-1.45,42">Below</button>
+      <button data-view="0.65,0.24,46">Iso</button>
+      <button id="vWalk" title="First-person: WASD to walk, drag to look, Esc to exit" aria-label="Walk — first-person view">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="14" cy="2.9" r="2.1" fill="currentColor"/>
+          <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.4 6.6 L12.6 12" stroke-width="3.2"/>
+            <path d="M13.5 7.3 L16.3 10.2 L18.3 11.6" stroke-width="2"/>
+            <path d="M13 7.3 L9.9 9.2 L8.8 12.3" stroke-width="2"/>
+            <path d="M12.6 11.9 L15.2 14.9 L17 19.5" stroke-width="2.6"/>
+            <path d="M12.6 11.9 L10.5 15.2 L8 18.8" stroke-width="2.6"/>
+          </g>
+        </svg>
+      </button>
+      <button data-view="0.65,0.02,5">Center</button>
+      <button data-view="0.65,1.5,40">Top</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /ctrlWrap -->
+
+<div id="sceneBar">
+  <label for="dayNight">Night</label>
+  <input type="range" id="dayNight" min="0" max="100" value="12" aria-label="Daylight">
+  <span class="dnCap">Day</span>
+</div>
+
+<div id="confirmOv" hidden>
+  <div id="confirmBox" role="dialog" aria-modal="true" aria-labelledby="confirmMsg">
+    <div id="confirmMsg"></div>
+    <div class="btns">
+      <button id="confirmYes" type="button">Yes</button>
+      <button id="confirmNo" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  // ---- constants (feet) ----
+  // H = canvas apex height (smoke hole rim); poles run just inside the canvas and cross ~2.5 ft above it
+  var H = 15, R = 10, HOLE_H = 15, HOLE_R = 0.9, PITCH = 0.0492, DOOR_A = 3.8;
+  var NPOLES = 15, W_PER_PX = 0.3, POLE_D = 0.25; // 3-inch poles; count set by Tipi slider
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var cv = document.getElementById('scene');
+  var ctx = cv.getContext('2d');
+  var Wpx = 0, Hpx = 0, dpr = 1;
+
+  var viewCX = 0;
+  function computeViewCenter() {
+    // center the tipi in the free space between the left and right control panels (desktop)
+    var left = 0, right = Wpx;
+    if (innerWidth > 640) {
+      var pn = document.getElementById('panel');
+      if (pn) { var pr = pn.getBoundingClientRect().right; if (pr > 0 && pr < Wpx * 0.6) left = pr; }
+      var pnR = document.getElementById('panelR');
+      if (pnR) { var pl = pnR.getBoundingClientRect().left; if (pl < Wpx && pl > Wpx * 0.4) right = pl; }
+    }
+    viewCX = (left + right) / 2;
+  }
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 1.5);
+    Wpx = innerWidth; Hpx = innerHeight;
+    cv.width = Wpx * dpr; cv.height = Hpx * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // desktop: the top card stacks scroll, the bottom cards are fixed on top of them. End each
+    // stack's scroll area just above its bottom card so every card can scroll fully into view.
+    var stkL = document.getElementById('panel'), stkR = document.getElementById('panelR');
+    if (innerWidth > 640) {
+      stkL.style.maxHeight = Math.max(120, document.getElementById('panelBL').getBoundingClientRect().top - 26) + 'px';
+      stkR.style.maxHeight = Math.max(120, document.getElementById('panelBR').getBoundingClientRect().top - 26) + 'px';
+    } else { stkL.style.maxHeight = ''; stkR.style.maxHeight = ''; }   // mobile keeps the CSS vh caps
+    computeViewCenter();
+    needsDraw = true;
+  }
+  addEventListener('resize', resize);
+
+  // ---- camera ----
+  var cam = { az: 0.65, el: 0.24, dist: 46 };
+  var CAM0 = { az: 0.65, el: 0.24, dist: 46 };
+  var target = [0, 8.2, 0];
+  var C = [0, 0, 0], bR = [1, 0, 0], bU = [0, 1, 0], bF = [0, 0, 1], focal = 700;
+
+  // first-person walk mode: eye-height camera inside the tipi. WASD/arrows move, drag looks
+  // around, Esc (or any view preset) exits. Position is clamped to stay inside the canvas.
+  var EYE_H = 5.5;
+  var walkMode = false, walk = { x: 0, z: 0, yaw: 0, pitch: 0.1 }, walkT = 0;
+  function walkLim() { return Math.max(0.5, coneR(EYE_H) - 0.7); }
+  function walkMove(fwd, str) {                      // fwd along the look heading, str = strafe right
+    var sy = Math.sin(walk.yaw), cy = Math.cos(walk.yaw);
+    walk.x += fwd * sy - str * cy;
+    walk.z += fwd * cy + str * sy;
+    var rr = Math.hypot(walk.x, walk.z), lim = walkLim();
+    if (rr > lim) { walk.x *= lim / rr; walk.z *= lim / rr; }
+  }
+
+  function updateCam() {
+    if (walkMode) {
+      C[0] = walk.x; C[1] = EYE_H; C[2] = walk.z;
+      var cp = Math.cos(walk.pitch), sp = Math.sin(walk.pitch);
+      var wf = [cp * Math.sin(walk.yaw), sp, cp * Math.cos(walk.yaw)];
+      var wr = [-wf[2], 0, wf[0]];
+      var wrl = Math.hypot(wr[0], wr[2]) || 1; wr[0] /= wrl; wr[2] /= wrl;
+      bF = wf; bR = wr;
+      bU = [wr[1] * wf[2] - wr[2] * wf[1], wr[2] * wf[0] - wr[0] * wf[2], wr[0] * wf[1] - wr[1] * wf[0]];
+      focal = Math.min(Wpx, Hpx) * 1.05;             // wider FOV than orbit — a head, not a telephoto
+      return;
+    }
+    var ce = Math.cos(cam.el), se = Math.sin(cam.el);
+    C[0] = target[0] + cam.dist * ce * Math.sin(cam.az);
+    C[1] = target[1] + cam.dist * se;
+    C[2] = target[2] + cam.dist * ce * Math.cos(cam.az);
+    var f = [target[0] - C[0], target[1] - C[1], target[2] - C[2]];
+    var fl = Math.hypot(f[0], f[1], f[2]); f[0] /= fl; f[1] /= fl; f[2] /= fl;
+    var r = [-f[2], 0, f[0]];
+    var rl = Math.hypot(r[0], r[2]) || 1; r[0] /= rl; r[2] /= rl;
+    bF = f; bR = r;
+    bU = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    focal = Math.min(Wpx, Hpx) * 1.9;
+  }
+  // project into out=[sx, sy, scale]; returns false if behind camera
+  function proj(x, y, z, out) {
+    var dx = x - C[0], dy = y - C[1], dz = z - C[2];
+    var zc = dx * bF[0] + dy * bF[1] + dz * bF[2];
+    if (zc < 1) return false;
+    var s = focal / zc;
+    out[0] = viewCX + (dx * bR[0] + dy * bR[1] + dz * bR[2]) * s;
+    out[1] = Hpx / 2 - (dx * bU[0] + dy * bU[1] + dz * bU[2]) * s;
+    out[2] = s;
+    return true;
+  }
+
+  // ---- seeded rng ----
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var seed = 7;
+  var matSeed = 11, matPattern = 'medium';   // mats: independent seed + coverage (sparse|medium|full)
+  var layout = 'radial';                      // LED/vine rig layout: 'radial' | 'spiral'
+  var pattern = 'lagoon';                     // active LED pattern (see PATTERNS)
+  var wallMode = 'ghost';                     // front wall: 'solid' | 'ghost' | 'open'
+  var dripHue = 0.45, dripSat = 0.08;         // drip overlay colour (hue wheel; v = 1)
+  var edgeMode = 'rope';                      // perimeter edge light: 'rope' | 'led' | 'off'
+  // resample a polyline ([[x,y,z],...]) to ~PITCH-spaced points -> Float32Array of pixel positions
+  function resampleToPitch(path) {
+    if (!path || path.length < 2) return new Float32Array(0);
+    var out = [path[0][0], path[0][1], path[0][2]], need = PITCH;
+    for (var i = 1; i < path.length; i++) {
+      var a = path[i - 1], b = path[i];
+      var seg = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]), pos = 0;
+      while (need <= seg - pos + 1e-9) {
+        pos += need; var t = pos / seg;
+        out.push(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
+        need = PITCH;
+      }
+      need -= (seg - pos);
+    }
+    return new Float32Array(out);
+  }
+
+  // canvas radius: R at ground tapering to the smoke-hole radius at the canvas apex
+  function coneR(h) { var t = Math.min(Math.max(h / H, 0), 1); return R + (HOLE_R - R) * t; }
+
+  // ---- params ----
+  var P = {};
+  var sliders = ['count', 'lmin', 'lmax', 'hlo', 'hhi', 'floorGap', 'fill', 'bri', 'patSpeed', 'dripSpeed', 'mainLen', 'dropDensity', 'vineCount', 'drapedFt', 'tipiH', 'tipiD', 'tipiP', 'dayNight', 'ropeH', 'ropeDrape', 'ropeSp', 'fogLen', 'fogSize', 'fogStr', 'fogBri'];
+  // pattern speed: slider 0..100 -> exponential multiplier, 50 = 1x, big extremes (0.125x .. 8x)
+  function patMulFromSpeed(v) { return Math.pow(8, ((v == null ? 50 : v) - 50) / 50); }
+  var toggles = ['ledStrings', 'lightCast', 'drapedLeds', 'spiralLeds', 'vinesDraped', 'vinesOnPoles', 'fog', 'spotOn', 'drips',
+                 'matsOn',
+                 'p62', 'p510', 'p54', 'pKid', 'pTod', 'banana'];
+  function readParams() {
+    sliders.forEach(function (id) { P[id] = +document.getElementById(id).value; });
+    toggles.forEach(function (id) { P[id] = document.getElementById(id).checked; });
+    P.hideFront = wallMode === 'open';       // front wall: solid | ghost | open
+    P.wallSolid = wallMode === 'solid';
+    P.rope = edgeMode !== 'off';             // edge light: rope | led | off
+    P.fogColor = document.getElementById('fogColor').value;
+    if (P.lmin > P.lmax) P.lmax = P.lmin;
+    if (P.hlo > P.hhi) P.hhi = P.hlo;
+  }
+
+  // ---- generated geometry ----
+  var strings = [], vines = [], poles = [], mats = [];
+
+  // foam mats: 6 ft x 2 ft x 3.5 in (nswehla's estimate), 1-inch rounded edges
+  var MATS = { L: 6, W: 2, T: 0.29, CR: 0.083 };
+  var MAT_COLS = [['#33415c', '#222c3f'], ['#5c3340', '#3e222c'], ['#46335c', '#2f223f'], ['#33565c', '#223a3f']];
+  function rotPt(cx, cz, x, z, s, c) { return [cx + x * c - z * s, cz + x * s + z * c]; }
+  function matPoly(cx, cz, ang, inset) {
+    var s = Math.sin(ang), c = Math.cos(ang);
+    var hl = MATS.L / 2 - inset, hw = MATS.W / 2 - inset;
+    return [rotPt(cx, cz, -hl, -hw, s, c), rotPt(cx, cz, hl, -hw, s, c),
+            rotPt(cx, cz, hl, hw, s, c), rotPt(cx, cz, -hl, hw, s, c)];
+  }
+  function polysOverlap(A, B) { // SAT, convex
+    var polys = [A, B];
+    for (var p = 0; p < 2; p++) {
+      var poly = polys[p];
+      for (var e = 0; e < poly.length; e++) {
+        var p1 = poly[e], p2 = poly[(e + 1) % poly.length];
+        var nx = p2[1] - p1[1], nz = p1[0] - p2[0];
+        var minA = 1e9, maxA = -1e9, minB = 1e9, maxB = -1e9, q, d;
+        for (q = 0; q < A.length; q++) { d = A[q][0] * nx + A[q][1] * nz; if (d < minA) minA = d; if (d > maxA) maxA = d; }
+        for (q = 0; q < B.length; q++) { d = B[q][0] * nx + B[q][1] * nz; if (d < minB) minB = d; if (d > maxB) maxB = d; }
+        if (maxA < minB || maxB < minA) return false;
+      }
+    }
+    return true;
+  }
+  function tryMat(cx, cz, ang, clearR) {
+    var poly = matPoly(cx, cz, ang, 0), q;
+    for (q = 0; q < 4; q++) if (Math.hypot(poly[q][0], poly[q][1]) > R - 0.4) return false;
+    if (clearR > 0) {
+      for (q = 0; q < 4; q++) {
+        var nq = poly[(q + 1) % 4];
+        if (Math.hypot(poly[q][0], poly[q][1]) < clearR) return false;
+        if (Math.hypot((poly[q][0] + nq[0]) / 2, (poly[q][1] + nq[1]) / 2) < clearR) return false;
+      }
+    }
+    var padded = matPoly(cx, cz, ang, -0.12);
+    for (q = 0; q < mats.length; q++) if (polysOverlap(padded, mats[q].poly)) return false;
+    // rounded outline, 16 points (4 per corner arc)
+    var s = Math.sin(ang), c = Math.cos(ang), cr = MATS.CR;
+    var hl = MATS.L / 2, hw = MATS.W / 2, o = [];
+    var ctrs = [[hl - cr, hw - cr], [-(hl - cr), hw - cr], [-(hl - cr), -(hw - cr)], [hl - cr, -(hw - cr)]];
+    for (var ci = 0; ci < 4; ci++) {
+      for (var k2 = 0; k2 <= 3; k2++) {
+        var aa2 = (ci * 90 + k2 * 30) * Math.PI / 180;
+        o.push(rotPt(cx, cz, ctrs[ci][0] + cr * Math.cos(aa2), ctrs[ci][1] + cr * Math.sin(aa2), s, c));
+      }
+    }
+    mats.push({ poly: poly, o: o, col: mats.length % MAT_COLS.length });
+    return true;
+  }
+  function makePoles() {
+    poles = [];
+    for (var i = 0; i < NPOLES; i++) {
+      var a = i / NPOLES * Math.PI * 2 + 0.12;
+      // base just inside the canvas (canvas rests on the poles); the line runs toward a point
+      // crossing past the axis above the smoke hole, staying inside the cone the whole way up
+      var b = [(R - POLE_D / 2) * Math.sin(a), 0, (R - POLE_D / 2) * Math.cos(a)];
+      var t0 = [0.45 * Math.sin(a + 2.6), H * 1.13, 0.45 * Math.cos(a + 2.6)];
+      var dx = t0[0] - b[0], dy = t0[1] - b[1], dz = t0[2] - b[2];
+      // collar: where this pole passes closest to the axis — the tightest point of the bundle.
+      // The always-visible shaft ends here so nothing splays over the view from above.
+      var sC = Math.min(1.04, Math.max(0.9, -(b[0] * dx + b[2] * dz) / (dx * dx + dz * dz)));
+      // spike: same line continued past the collar, splaying out the far side like a real tipi
+      // (uneven lengths so the spray reads natural)
+      var sT = sC + (3.2 + 2.2 * hash1(i * 17.3)) / Math.hypot(dx, dy, dz);
+      poles.push({
+        a: a, b: b,
+        c: [b[0] + dx * sC, b[1] + dy * sC, b[2] + dz * sC],
+        t: [b[0] + dx * sT, b[1] + dy * sT, b[2] + dz * sT]
+      });
+    }
+  }
+  makePoles();
+
+  // scale figures: hand-traced outlines (normalized y 0 feet -> 1 crown, x in height units),
+  // generated from mockup/figures/*.svg. Each: loops (subpaths, incl. holes), halfW, topY, cy.
+  var FIGURES = {"male":{"loops":[[[-0.03,1],[0.008,0.99],[0.03,0.951],[0.008,0.848],[0.032,0.833],[0.094,0.819],[0.105,0.805],[0.158,0.471],[0.16,0.439],[0.146,0.421],[0.133,0.422],[0.115,0.449],[0.112,0.468],[0.126,0.506],[0.105,0.566],[0.101,0.618],[0.064,0.699],[0.063,0.611],[0.096,0.459],[0.093,0.291],[0.112,0.222],[0.087,0.094],[0.105,0.018],[0.094,0.004],[0.047,0],[0.037,0.009],[0.05,0.102],[0.023,0.34],[0.003,0.453],[-0.006,0.462],[-0.015,0.453],[-0.034,0.302],[-0.04,0.181],[-0.035,0.089],[-0.012,0.013],[-0.024,0],[-0.064,0.002],[-0.083,0.016],[-0.076,0.1],[-0.104,0.232],[-0.093,0.288],[-0.106,0.369],[-0.105,0.498],[-0.083,0.637],[-0.098,0.709],[-0.125,0.499],[-0.122,0.449],[-0.14,0.432],[-0.161,0.456],[-0.158,0.594],[-0.144,0.64],[-0.138,0.789],[-0.119,0.815],[-0.063,0.828],[-0.043,0.842],[-0.043,0.863],[-0.071,0.9],[-0.074,0.948],[-0.063,0.981],[-0.031,1]]],"halfW":0.161,"topY":1,"cy":0.488},"female":{"loops":[[[0.004,1],[0.031,0.997],[0.059,0.968],[0.057,0.916],[0.032,0.872],[0.036,0.847],[0.102,0.813],[0.117,0.79],[0.129,0.668],[0.144,0.608],[0.142,0.533],[0.158,0.486],[0.153,0.473],[0.139,0.47],[0.119,0.496],[0.126,0.537],[0.093,0.689],[0.082,0.703],[0.068,0.657],[0.068,0.615],[0.1,0.562],[0.11,0.517],[0.092,0.318],[0.11,0.207],[0.085,0.095],[0.092,0.01],[0.078,0],[0.025,0.008],[0.058,0.08],[0.063,0.132],[0.045,0.322],[0.021,0.413],[0.015,0.487],[-0.002,0.485],[-0.007,0.399],[-0.033,0.295],[-0.046,0.086],[-0.026,0.013],[-0.068,0.005],[-0.082,0.02],[-0.076,0.068],[-0.102,0.201],[-0.099,0.247],[-0.076,0.309],[-0.095,0.481],[-0.087,0.55],[-0.047,0.642],[-0.063,0.701],[-0.088,0.645],[-0.119,0.531],[-0.109,0.494],[-0.143,0.467],[-0.158,0.478],[-0.108,0.665],[-0.101,0.783],[-0.082,0.813],[-0.011,0.848],[-0.012,0.87],[-0.032,0.892],[-0.043,0.944],[-0.032,0.983],[0.003,1]]],"halfW":0.158,"topY":1,"cy":0.519},"kid":{"loops":[[[0.008,1],[0.057,0.99],[0.086,0.953],[0.085,0.876],[0.074,0.855],[0.035,0.831],[0.035,0.81],[0.045,0.795],[0.117,0.776],[0.134,0.709],[0.128,0.551],[0.141,0.428],[0.081,0.092],[0.095,0.012],[0.087,0.003],[0.01,0.013],[0.039,0.084],[0.04,0.245],[0.056,0.356],[0.053,0.458],[0.035,0.455],[-0.007,0.23],[-0.054,0.106],[-0.057,0.076],[-0.044,0.019],[-0.109,0],[-0.141,0.014],[-0.09,0.112],[-0.062,0.426],[-0.04,0.516],[-0.088,0.667],[-0.094,0.742],[-0.082,0.761],[-0.016,0.798],[-0.021,0.835],[-0.057,0.877],[-0.055,0.94],[-0.037,0.98],[0.007,0.999]]],"halfW":0.141,"topY":1,"cy":0.523},"toddler":{"loops":[[[0.005,1],[0.04,1],[0.083,0.982],[0.11,0.947],[0.117,0.873],[0.103,0.786],[0.086,0.761],[0.058,0.744],[0.146,0.698],[0.163,0.653],[0.174,0.565],[0.226,0.453],[0.226,0.389],[0.202,0.372],[0.181,0.372],[0.17,0.404],[0.184,0.431],[0.181,0.442],[0.146,0.484],[0.139,0.481],[0.16,0.424],[0.163,0.361],[0.152,0.112],[0.156,0.098],[0.195,0.06],[0.205,0.031],[0.202,0.014],[0.184,0],[0.107,0],[0.09,0.014],[0.103,0.073],[0.051,0.182],[0.051,0.249],[0.03,0.312],[0.005,0.309],[-0.016,0.144],[-0.04,0.088],[-0.033,0.024],[-0.083,0.011],[-0.156,0.014],[-0.17,0.018],[-0.181,0.039],[-0.177,0.06],[-0.117,0.081],[-0.132,0.151],[-0.132,0.224],[-0.121,0.277],[-0.135,0.333],[-0.139,0.411],[-0.128,0.473],[-0.135,0.481],[-0.149,0.46],[-0.16,0.386],[-0.195,0.369],[-0.219,0.389],[-0.226,0.411],[-0.219,0.477],[-0.167,0.614],[-0.103,0.712],[-0.054,0.744],[-0.072,0.758],[-0.107,0.842],[-0.103,0.94],[-0.054,0.986],[0.002,0.996]]],"halfW":0.226,"topY":1,"cy":0.415}};
+  // hand-traced outlines from mockup/figures/*.svg (normalized: y 0 feet -> 1 crown, x in
+  // height units). Rendered yaw-billboarded with a little depth (see draw loop).
+  var PEOPLE = [
+    { id: 'p62',  fig: 'male',    h: 6.17, ang: 2.35, radF: 0.62, label: "6'2\"" },
+    { id: 'p510', fig: 'female',  h: 5.83, ang: 3.75, radF: 0.60, label: "5'10\"" },
+    { id: 'p54',  fig: 'male',    h: 5.33, ang: 0.55, radF: 0.62, label: "5'4\"" },
+    { id: 'pKid', fig: 'kid',     h: 4.00, ang: 1.30, radF: 0.52, label: "4'0\"", chest: 0.6 },
+    { id: 'pTod', fig: 'toddler', h: 2.25, ang: 5.05, radF: 0.44, label: "2'3\"", chest: 0.5 }
+  ];
+  for (var ppi = 0; ppi < PEOPLE.length; ppi++) PEOPLE[ppi].data = FIGURES[PEOPLE[ppi].fig];
+  // per-vertex INWARD normals for each outline loop — used to round the depth edges by
+  // offsetting the outline inward along its normal (uniform border), not by scaling.
+  (function () {
+    for (var fk in FIGURES) {
+      var f = FIGURES[fk]; f.norms = [];
+      // visual horizontal centre = area centroid of the main outline (extent midpoints mislead
+      // when a stray arm or stance skews the bounding box) — used to centre the chest label
+      var L0 = f.loops[0], aSum = 0, cxSum = 0;
+      for (var lc = 0; lc < L0.length; lc++) {
+        var pA2 = L0[lc], pB2 = L0[(lc + 1) % L0.length];
+        var cr2 = pA2[0] * pB2[1] - pB2[0] * pA2[1];
+        aSum += cr2; cxSum += (pA2[0] + pB2[0]) * cr2;
+      }
+      f.cx = aSum !== 0 ? cxSum / (3 * aSum) : 0;
+      for (var li = 0; li < f.loops.length; li++) {
+        var L = f.loops[li], n = L.length, A = 0, i;
+        for (i = 0; i < n; i++) { var a = L[i], b = L[(i + 1) % n]; A += a[0] * b[1] - b[0] * a[1]; }
+        var s = A > 0 ? 1 : -1;  // inward-normal sign from winding
+        var nm = [];
+        for (i = 0; i < n; i++) {
+          var p0 = L[(i - 1 + n) % n], p1 = L[i], p2 = L[(i + 1) % n];
+          var n1x = s * -(p1[1] - p0[1]), n1y = s * (p1[0] - p0[0]);
+          var n2x = s * -(p2[1] - p1[1]), n2y = s * (p2[0] - p1[0]);
+          var l1 = Math.hypot(n1x, n1y) || 1, l2 = Math.hypot(n2x, n2y) || 1;
+          var vx = n1x / l1 + n2x / l2, vy = n1y / l1 + n2y / l2, vl = Math.hypot(vx, vy) || 1;
+          nm.push([vx / vl, vy / vl]);
+        }
+        f.norms.push(nm);
+      }
+    }
+  })();
+
+  var LEAF_SHADES = ['#2c5530', '#38663a', '#477a40', '#55894a', '#33604b'];
+  function leafify(pts3, rnd) {
+    var leaves = [];
+    for (var s = 0; s < pts3.length - 1; s++) {
+      var a = pts3[s], b = pts3[s + 1];
+      var segLen = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      var nL = Math.max(1, Math.round(segLen / 0.24));
+      for (var q = 0; q < nL; q++) {
+        var t = (q + rnd()) / nL;
+        var laz = rnd() * Math.PI * 2, lel = -0.15 - rnd() * 1.1;
+        var ux = Math.cos(lel) * Math.sin(laz), uy = Math.sin(lel), uz = Math.cos(lel) * Math.cos(laz);
+        var vx = uz, vz = -ux, vn = Math.hypot(vx, vz) || 1;
+        vx /= vn; vz /= vn;
+        var vy = (rnd() - 0.5) * 0.6;
+        var sz = 0.16 + rnd() * 0.13;
+        leaves.push({
+          x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t, z: a[2] + (b[2] - a[2]) * t,
+          ux: ux * sz, uy: uy * sz, uz: uz * sz,
+          vx: vx * sz, vy: vy * sz, vz: vz * sz,
+          sh: (rnd() * LEAF_SHADES.length) | 0
+        });
+      }
+    }
+    return leaves;
+  }
+
+  function regen() {
+    readParams();
+    // attach heights can't exceed the canvas apex — cap the sliders to the tipi height so a
+    // maxed Low attach doesn't hang a halo of leaves above the tipi
+    var hCap = P.tipiH - 0.5;
+    ['hlo', 'hhi'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (+el.max !== hCap) el.max = hCap;   // range inputs re-clamp their value automatically
+    });
+    P.hlo = Math.min(P.hlo, hCap); P.hhi = Math.min(P.hhi, hCap);
+    H = P.tipiH; R = P.tipiD / 2; HOLE_H = H; NPOLES = P.tipiP;
+    // door stays centered in the bay between two poles, nearest its nominal angle
+    var pstep = Math.PI * 2 / NPOLES;
+    DOOR_A = (Math.round((3.8 - 0.12) / pstep - 0.5) + 0.5) * pstep + 0.12;
+    target[1] = H * 0.45;
+    makePoles();
+    var rnd = mulberry32(seed);
+    strings = []; vines = [];
+    var totalPx = 0, ledEligible = 0;   // eligible = vines that can carry a string (verts or drops)
+    var floorG = P.floorGap;
+    var poleStep = Math.PI * 2 / NPOLES;
+    function snapPole(ang) { return Math.round((ang - 0.12) / poleStep) * poleStep + 0.12; }
+
+    // draped garland vines — both layouts; generated until the requested total footage is strung
+    var drapedTarget = P.drapedFt == null ? 100 : P.drapedFt;
+    var drapedLen = 0, drapedGuard = 0;
+    while (drapedLen < drapedTarget - 1 && drapedGuard++ < 240) {
+      var t1 = rnd() * Math.PI * 2, dt = 0.7 + rnd() * 1.3, t2 = t1 + dt;
+      // "Vines on poles": anchor both ends to poles so they can be tied on without extra rigging
+      if (P.vinesOnPoles) {
+        t1 = snapPole(t1); t2 = snapPole(t2);
+        if (Math.abs(t2 - t1) < poleStep * 0.5) t2 = t1 + poleStep * (rnd() < 0.5 ? 1 : -1);
+      }
+      var h1 = Math.max(P.hlo, Math.min(7 + rnd() * 8, HOLE_H - 1)), h2 = Math.max(P.hlo, Math.min(7 + rnd() * 8, HOLE_H - 1));
+      var rf = P.vinesOnPoles ? 0.94 : 0.9;
+      var p1 = [coneR(h1) * rf * Math.sin(t1), h1, coneR(h1) * rf * Math.cos(t1)];
+      var p2 = [coneR(h2) * rf * Math.sin(t2), h2, coneR(h2) * rf * Math.cos(t2)];
+      var dist = Math.hypot(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
+      var sag = dist * 0.18 * (0.7 + rnd() * 0.6);
+      var pts2 = [];
+      for (var s = 0; s <= 13; s++) {
+        var t = s / 13;
+        pts2.push([
+          p1[0] + (p2[0] - p1[0]) * t,
+          Math.max(floorG, p1[1] + (p2[1] - p1[1]) * t - sag * Math.sin(Math.PI * t)),
+          p1[2] + (p2[2] - p1[2]) * t
+        ]);
+      }
+      for (var dl2 = 1; dl2 < pts2.length; dl2++) {
+        drapedLen += Math.hypot(pts2[dl2][0] - pts2[dl2 - 1][0], pts2[dl2][1] - pts2[dl2 - 1][1], pts2[dl2][2] - pts2[dl2 - 1][2]);
+      }
+      vines.push({ pts: pts2, leaves: leafify(pts2, rnd), kind: 'd' });
+    }
+    // optional LEDs woven along the draped garlands (counts in the totals when enabled).
+    // Own RNG stream: toggling this must never re-roll anything else in the scene.
+    if (P.drapedLeds && P.vinesDraped) {
+      var dlr = mulberry32(seed ^ 0x5f3759);
+      for (var dgi = 0; dgi < vines.length; dgi++) {
+        if (vines[dgi].kind !== 'd') continue;
+        var gpts = resampleToPitch(vines[dgi].pts);
+        var gn = gpts.length / 3;
+        if (gn < 1) continue;
+        totalPx += gn;
+        strings.push({ pts: gpts, n: gn, hue: 150 + dlr() * 40, phase: dlr() * Math.PI * 2,
+                       drip: -1, nextDrip: 1e9, L: gn * PITCH, anchor: vines[dgi].pts[0], role: 'draped' });
+      }
+    }
+
+    if (layout === 'spiral') {
+      // ===== SPIRAL: one long backbone vine wound up the wall, with random-length drops off it.
+      // Shares the radial Low/High attach band: starts at Low attach, tops out at High attach.
+      // "Main length" = the spiral's total run — more length packs more wraps into the band;
+      // "Drop density" = how many vertical vines hang off.
+      var targetLen = P.mainLen;
+      var sLo = Math.min(P.hlo, HOLE_H - 1), sHi = Math.min(P.hhi, HOLE_H - 0.5);
+      var avgCirc = Math.PI * 2 * coneR((sLo + sHi) / 2) * 0.96;
+      var nWraps = Math.max(0.25, targetLen / avgCirc);
+      var risePerWrap = Math.max(0, sHi - sLo) / nWraps;
+      var sa = DOOR_A + 0.4, sy = sLo, sArc = 0, sdA = 0.10, sprev = null, spiralPath = [];
+      while (sArc < targetLen && sy < sHi + 0.01) {
+        var srr = coneR(sy) * 0.96;
+        var spt = [srr * Math.sin(sa), sy, srr * Math.cos(sa)];
+        if (sprev) sArc += Math.hypot(spt[0] - sprev[0], spt[1] - sprev[1], spt[2] - sprev[2]);
+        spiralPath.push(spt); sprev = spt;
+        sa += sdA; sy += risePerWrap * sdA / (Math.PI * 2);
+      }
+      vines.push({ pts: spiralPath, leaves: leafify(spiralPath, rnd), kind: 'spiral' });
+      var spiralLed = resampleToPitch(spiralPath);
+      if (spiralLed.length >= 6) {
+        var sn = spiralLed.length / 3; totalPx += sn;
+        strings.push({ pts: spiralLed, n: sn, hue: 150, phase: 0, drip: -1, nextDrip: 1e9, L: sArc, anchor: spiralPath[0], role: 'spiral' });
+      }
+      var dens = (P.dropDensity == null ? 50 : P.dropDensity) / 100;
+      var dropSpacing = 8 - 6.4 * dens;   // ft between drops: ~8 (sparse) .. ~1.6 (dense)
+      var walk = 0, nextDrop = dropSpacing * (0.5 + rnd() * 0.5), wprev = spiralPath[0] || [0, 0, 0];
+      var dropVines = [];
+      for (var wi = 1; wi < spiralPath.length; wi++) {
+        var wp = spiralPath[wi];
+        walk += Math.hypot(wp[0] - wprev[0], wp[1] - wprev[1], wp[2] - wprev[2]); wprev = wp;
+        if (walk >= nextDrop) {
+          nextDrop = walk + dropSpacing * (0.7 + rnd() * 0.6);
+          var dyTop = wp[1];
+          var dLen = Math.min(P.lmin + (P.lmax - P.lmin) * rnd(), Math.max(PITCH, dyTop - floorG));
+          var dphase = rnd() * Math.PI * 2, dsw = 0.1 + rnd() * 0.08;
+          var dPath = [], dsteps = Math.max(3, Math.round(dLen / 0.4));
+          for (var dsi = 0; dsi <= dsteps; dsi++) {
+            var dtt = dsi / dsteps;
+            dPath.push([wp[0] + Math.sin(dtt * 5 + dphase) * dsw, dyTop - dLen * dtt, wp[2] + Math.cos(dtt * 4 + dphase) * dsw]);
+          }
+          var dv = { pts: dPath, leaves: leafify(dPath, rnd), kind: 'drop', len: dLen, anchor: [wp[0], dyTop, wp[2]], phase: dphase };
+          vines.push(dv); dropVines.push(dv);
+        }
+      }
+      // LED subset here too: the longest "LED vines" count of drops carry a string
+      var dropsByLen = dropVines.slice().sort(function (a, b) { return b.len - a.len; });
+      ledEligible = dropsByLen.length;
+      var nDropLed = Math.min(P.count, dropsByLen.length);
+      for (var dj = 0; dj < nDropLed; dj++) {
+        var ddv = dropsByLen[dj];
+        var dpts = resampleToPitch(ddv.pts);
+        var dn = dpts.length / 3;
+        if (dn < 1) continue;
+        totalPx += dn;
+        strings.push({ pts: dpts, n: dn, hue: 165 + rnd() * 28, phase: ddv.phase, drip: -1, nextDrip: 2 + rnd() * 8, L: ddv.len, anchor: ddv.anchor, role: 'drop' });
+      }
+    } else {
+      // ===== RADIAL (default): ONE population of vertical vines; LEDs are a subset — a string
+      // gets woven into each of the longest "LED vines" count of them. =====
+      // center clearance comes from "High attach": a vine anchored highest sits at the narrowest
+      // cone radius (replaces the old Center clear).
+      var innerR = coneR(Math.min(P.hhi, HOLE_H - 0.5)) * 0.92;
+      var verts = [];
+      for (var i = 0; i < P.vineCount; i++) {
+        var th = rnd() * Math.PI * 2;
+        var h = Math.min(P.hlo + (P.hhi - P.hlo) * rnd(), HOLE_H - 0.5);
+        var rc = coneR(h) * 0.92;
+        var rad = Math.min(rc, Math.max(innerR, rc * (1 - (P.fill / 100) * rnd())));
+        if (P.vinesOnPoles) { th = snapPole(th); rad = coneR(h) * 0.94; }
+        var L = P.lmin + (P.lmax - P.lmin) * rnd();
+        L = Math.max(PITCH, Math.min(L, h - floorG));   // stop floorG above the floor
+        var ax = rad * Math.sin(th), az = rad * Math.cos(th);
+        var phase = rnd() * Math.PI * 2, sway = 0.09 + rnd() * 0.09;
+        var vpath = [], steps = Math.max(4, Math.round(L / 0.35));
+        for (var q = 0; q <= steps; q++) {
+          var tq = q / steps;
+          vpath.push([ax + Math.sin(tq * 5 + phase) * sway, h - L * tq, az + Math.cos(tq * 4 + phase) * sway]);
+        }
+        var vv = { pts: vpath, leaves: leafify(vpath, rnd), kind: 'v', len: L, anchor: [ax, h, az], phase: phase };
+        vines.push(vv); verts.push(vv);
+      }
+      // LED subset: the longest N vines carry a string along their exact path
+      var byLen = verts.slice().sort(function (a, b) { return b.len - a.len; });
+      ledEligible = byLen.length;
+      var nLed = Math.min(P.count, byLen.length);
+      for (var li2 = 0; li2 < nLed; li2++) {
+        var lv = byLen[li2];
+        var lpts = resampleToPitch(lv.pts);
+        var ln = lpts.length / 3;
+        if (ln < 1) continue;
+        totalPx += ln;
+        strings.push({ pts: lpts, n: ln, hue: 168 + rnd() * 38, phase: lv.phase, drip: -1, nextDrip: 1 + rnd() * 8, L: lv.len, anchor: lv.anchor, role: 'radial' });
+      }
+    }
+    // foam mats — own RNG (matSeed) so LED/vine tweaks never reshuffle the mats; the mat card
+    // re-seeds it only on Reshuffle or when you tap the active coverage icon again
+    mats = [];
+    if (P.matsOn) {
+      var matRnd = mulberry32(matSeed);
+      var offx = (matRnd() - 0.5) * 1.7, offz = (matRnd() - 0.5) * 1.7;  // grid phase -> shuffle varies packing
+      if (matPattern === 'full') {
+        // near-complete coverage: neat brick-bond rows of mats laid side by side, then a
+        // cross-laid pass that plugs the leftover gaps along the walls
+        // pitches must clear the mat size PLUS the anti-overlap padding (0.12 each side)
+        var rowPhase = offx * 0.5;
+        for (var rz = -R + 1.15, row = 0; rz <= R - 1.0; rz += 2.26, row++) {
+          var rowOff = (row % 2) * 3.14 + rowPhase;
+          for (var rx = -R - 3 + rowOff; rx <= R + 3; rx += 6.26) {
+            tryMat(rx, rz, (matRnd() - 0.5) * 0.02, 0);
+          }
+        }
+        // rim ring: tangential mats hugging the wall where straight rows can't reach
+        // (radius chosen so the far corners clear the R-0.4 wall margin)
+        for (var ta = 0; ta < 26; ta++) {
+          var tAng = ta / 26 * Math.PI * 2 + rowPhase * 0.15;
+          var trr = R - 2.08;
+          tryMat(trr * Math.sin(tAng), trr * Math.cos(tAng), -tAng + (matRnd() - 0.5) * 0.03, 0);
+        }
+        // cross-laid pass plugs whatever gaps remain
+        for (var ez = -R; ez <= R; ez += 1.15) {
+          for (var ex = -R; ex <= R; ex += 1.15) {
+            tryMat(ex + offz * 0.3, ez, Math.PI / 2 + (matRnd() - 0.5) * 0.03, 0);
+          }
+        }
+      } else if (matPattern === 'medium') {
+        // grid with a central clearing for the fog / gathering spot
+        for (var gz2 = -R; gz2 <= R; gz2 += 2.1) {
+          for (var gx2 = -R; gx2 <= R; gx2 += 2.1) {
+            var mhoriz = Math.abs(gz2) > 3.2;
+            tryMat(gx2 + offx + (matRnd() - 0.5) * 0.2, gz2 + offz + (matRnd() - 0.5) * 0.2,
+                   (mhoriz ? 0 : Math.PI / 2) + (matRnd() - 0.5) * 0.06, 2.8);
+          }
+        }
+      } else {
+        // sparse: a few clusters, base angle randomised so a re-shuffle rotates the layout
+        var ia = matRnd() * Math.PI * 2, s0 = Math.sin(ia), c0 = Math.cos(ia), mi;
+        for (mi = 0; mi < 3; mi++) {
+          tryMat(3.2 - mi * (MATS.W + 0.2) * s0, 2.0 + mi * (MATS.W + 0.2) * c0, ia + (matRnd() - 0.5) * 0.05, 2.6);
+        }
+        tryMat(3.2 + 5.4 * c0, 2.0 + 5.4 * s0, ia + Math.PI / 2, 2.6);
+        var edgeAngs = [2.0, 3.1, 4.3, 5.6, 0.9];
+        for (mi = 0; mi < edgeAngs.length; mi++) {
+          var ea = edgeAngs[mi] + ia + (matRnd() - 0.5) * 0.35, er = R - 2;
+          tryMat(er * Math.sin(ea), er * Math.cos(ea), -ea + (matRnd() - 0.5) * 0.15, 0);
+        }
+      }
+    }
+    // stats
+    document.getElementById('sPx').textContent = totalPx.toLocaleString();
+    var feet = totalPx * PITCH;
+    document.getElementById('sLen').innerHTML = Math.round(feet) + ' <em>ft (' + (feet * 0.3048).toFixed(1) + ' m)</em>';
+    var per = strings.length ? Math.round(totalPx / strings.length) : 0;
+    document.getElementById('sPerStr').textContent = '~' + per;
+    // total vine footage: every foliage run in the scene (garlands, verticals, spiral, drops)
+    var vineFt = 0;
+    for (var vfi = 0; vfi < vines.length; vfi++) {
+      var vfp = vines[vfi].pts;
+      for (var vfj = 1; vfj < vfp.length; vfj++) {
+        vineFt += Math.hypot(vfp[vfj][0] - vfp[vfj - 1][0], vfp[vfj][1] - vfp[vfj - 1][1], vfp[vfj][2] - vfp[vfj - 1][2]);
+      }
+    }
+    document.getElementById('sVine').innerHTML = Math.round(vineFt) + ' <em>ft (' + (vineFt * 0.3048).toFixed(1) + ' m)</em>';
+    var wMax = totalPx * W_PER_PX;
+    document.getElementById('sWMax').innerHTML = Math.round(wMax) + ' <em>W (' + Math.round(wMax / 12) + ' A)</em>';
+    document.getElementById('sWCap').innerHTML = Math.round(wMax * 0.3) + ' <em>W (' + Math.round(wMax * 0.3 / 12) + ' A)</em>';
+    // slider outputs
+    var units = { count: '', lmin: ' ft', lmax: ' ft', hlo: ' ft', hhi: ' ft', floorGap: ' ft', fill: '%', bri: '%', patSpeed: '', dripSpeed: '', mainLen: ' ft', dropDensity: '%', vineCount: '', tipiH: ' ft', tipiD: ' ft', tipiP: '', dayNight: '%', ropeH: ' ft', ropeDrape: ' ft', ropeSp: ' in', fogLen: ' ft', fogSize: ' in', fogStr: '%', fogBri: '%' };
+    sliders.forEach(function (id) {
+      var out = document.querySelector('output[for=' + id + ']');
+      if (!out) {
+        // editable numeric readouts mirror their slider — but never clobber one mid-typing
+        var nbx = document.getElementById(id + 'Num');
+        if (nbx && document.activeElement !== nbx) nbx.value = P[id];
+      }
+      else if (id === 'patSpeed' || id === 'dripSpeed') { var mul = patMulFromSpeed(P[id]); out.innerHTML = (mul >= 1 ? mul.toFixed(mul < 10 ? 1 : 0) : mul.toFixed(2)) + '&times;'; }
+      else out.textContent = P[id] + units[id];
+      // asking for more LED vines than there are vines to weave them into -> red readout
+      if (id === 'count' && out) out.classList.toggle('over', P.count > ledEligible);
+      // progress fill for the custom slider track (works identically across browsers)
+      var sel = document.getElementById(id);
+      if (sel.type === 'range') {
+        sel.style.setProperty('--p', ((sel.value - sel.min) / ((sel.max - sel.min) || 1) * 100) + '%');
+      }
+    });
+    needsDraw = true;
+  }
+
+  // ---- fog particles ----
+  var fogP = [], fogRunT = 0;   // fogRunT: seconds the machine has been running (spawn ramp)
+  var fogSprite = (function () {
+    // soft WHITE puff (grayscale so it can be tinted by the fog/spotlight colour on composite)
+    var c = document.createElement('canvas'); c.width = c.height = 64;
+    var g = c.getContext('2d');
+    var grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.20)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+    return c;
+  })();
+  // offscreen buffer: fog puffs accumulate here, then get tinted + blurred onto the scene
+  var fogBuf = document.createElement('canvas'), fogBufCtx = null;
+  var FOG_TOP = 0.6;  // emitter can hangs this far below the smoke-hole rim; fog exits its base
+  function stepFog(dt) {
+    // beard-fall: fog leaves an ~8in emitter can at the apex, falls as a narrow column that
+    // CONVERGES as it drops — outer strands evaporate high, the centre carries furthest, so the
+    // tail tapers to a thin point in the middle (like a beard). Output slider sets the source
+    // width; length + strength drive fall distance and density.
+    var lenF = P.fogLen || 6, strF = (P.fogStr == null ? 100 : P.fogStr) / 100;
+    var srcR = Math.max(0.05, (P.fogSize || 8) / 24);  // source radius, ft (inches/12/2)
+    var y0 = HOLE_H - FOG_TOP;                          // emit from the base of the can
+    // ramp the density target from zero over ~5s so startup pours a growing stream instead of
+    // one big chuff (the machine warming up)
+    fogRunT += dt;
+    var want = Math.round((200 + 320 * strF) * Math.min(1, fogRunT / 5));
+    var spawn = Math.min(22, want - fogP.length);
+    for (var i = 0; i < spawn; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var r0 = srcR * Math.sqrt(Math.random());
+      var rNorm = r0 / srcR;
+      fogP.push({
+        x: r0 * Math.sin(a), z: r0 * Math.cos(a),
+        y: y0 - Math.random() * 0.08, y0: y0,
+        vx: 0, vz: 0, vy: -(2.2 + Math.random() * 1.2),
+        sz: 0.55 + Math.random() * 0.4,
+        sw: Math.random() * Math.PI * 2,
+        // centre falls the full length; edges evaporate high -> tapered beard
+        maxFall: lenF * (1 - 0.55 * rNorm) * (0.85 + 0.15 * Math.random()),
+        life: 1
+      });
+    }
+    for (var j = fogP.length - 1; j >= 0; j--) {
+      var p = fogP[j];
+      var prog = (p.y0 - p.y) / p.maxFall;
+      var ang = Math.atan2(p.x, p.z);
+      // slight spread just under the nozzle, then converge inward toward the axis; turbulence
+      // calms as it converges so the tip stays thin
+      var drift = 0.1 - 0.55 * prog;
+      var turb = 0.05 * (1 - prog);
+      p.vx += (Math.sin(ang) * drift + Math.sin(p.sw + p.y * 1.6) * turb) * dt;
+      p.vz += (Math.cos(ang) * drift + Math.cos(p.sw * 1.3 + p.y * 1.4) * turb) * dt;
+      p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt;
+      p.sz += dt * 0.35 * (1 - prog);
+      p.life = Math.max(0, 1 - prog);
+      if (prog >= 1 || p.y < 0.3) fogP.splice(j, 1);
+    }
+  }
+
+  // ---- drawing ----
+  var pr = [0, 0, 0], pr2 = [0, 0, 0], pr3 = [0, 0, 0], pr4 = [0, 0, 0];
+  function depthAlpha(scale) { return Math.max(0.25, Math.min(1, scale / (focal / 40))); }
+
+  // ---- slider measurement guides: overlays drawn while a slider is adjusted, then fade out ----
+  var GUIDE_IDS = { hlo: 1, hhi: 1, floorGap: 1, mainLen: 1, dropDensity: 1, lmin: 1, lmax: 1 };
+  var GUIDE_HOLD = 800, GUIDE_FADE = 500;   // ms fully visible after last input, then fade
+  var guideId = null, guideT = -1e9, guideHeld = false;   // held = pointer still down on the slider
+  var G_RED = '255,82,82', G_GREEN = '96,230,130';
+  function fmtFt(v) { return String(+(+v).toFixed(2)) + ' ft'; }
+  function guideLabel(x, y, txt, alpha) {
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.strokeStyle = 'rgba(7,13,17,' + 0.85 * alpha + ')'; ctx.lineWidth = 3;
+    ctx.strokeText(txt, x, y);
+    ctx.fillStyle = 'rgba(' + G_RED + ',' + alpha + ')';
+    ctx.fillText(txt, x, y);
+  }
+  function guideRing(h, alpha, fillAlpha) {
+    // ring hugging the canvas at height h — follows the cone width
+    var r = coneR(h) * 0.97, started = false;
+    ctx.beginPath();
+    for (var i = 0; i <= 64; i++) {
+      var a = i / 64 * Math.PI * 2;
+      if (proj(r * Math.sin(a), h, r * Math.cos(a), pr)) {
+        if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
+      }
+    }
+    if (!started) return;
+    ctx.closePath();
+    if (fillAlpha > 0) { ctx.fillStyle = 'rgba(' + G_RED + ',' + fillAlpha + ')'; ctx.fill(); }
+    ctx.strokeStyle = 'rgba(' + G_RED + ',' + alpha + ')'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  function guideStrokePts(pts, style, width) {
+    ctx.beginPath(); var started = false;
+    for (var i = 0; i < pts.length; i++) {
+      if (proj(pts[i][0], pts[i][1], pts[i][2], pr)) {
+        if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
+      }
+    }
+    if (started) { ctx.strokeStyle = style; ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.stroke(); }
+  }
+  function guideVertical(x, yTop, yBot, z, style, width) {
+    if (proj(x, yTop, z, pr) && proj(x, yBot, z, pr2)) {
+      ctx.strokeStyle = style; ctx.lineWidth = width;
+      ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
+    }
+  }
+  // ---- LED pattern engine ----------------------------------------------------------------
+  // Each pattern is fn(t, k, si, st, wx, wy, wz, T, out): t = 0..1 along the string (0 = top),
+  // k = pixel index, si = string index, st = string object, (wx,wy,wz) = world position in ft,
+  // T = seconds already scaled by the Pattern speed slider; write rgb 0..1 into out.
+  // Adapted from Gaytway's shared/pattern-engine.js + GlitchWick's bouncing-ball candlestick.
+  function h2rgb(h, s, v, out) {
+    h = h - Math.floor(h);
+    var i = (h * 6) | 0, f = h * 6 - i;
+    var p = v * (1 - s), q = v * (1 - f * s), w = v * (1 - (1 - f) * s);
+    if (i === 0) { out[0] = v; out[1] = w; out[2] = p; }
+    else if (i === 1) { out[0] = q; out[1] = v; out[2] = p; }
+    else if (i === 2) { out[0] = p; out[1] = v; out[2] = w; }
+    else if (i === 3) { out[0] = p; out[1] = q; out[2] = v; }
+    else if (i === 4) { out[0] = w; out[1] = p; out[2] = v; }
+    else { out[0] = v; out[1] = p; out[2] = q; }
+  }
+  function hash1(x) { x = Math.sin(x * 12.9898) * 43758.5453; return x - Math.floor(x); }
+  // bouncing-ball height table: parabolic arcs with halving peaks (GlitchWick physics feel),
+  // normalized to one repeating cycle
+  var BALL_SEG = (function () {
+    var segs = [], peak = 1, t = 0;
+    while (peak > 0.04) { var d = Math.sqrt(peak); segs.push([t, d, peak]); t += d; peak *= 0.5; }
+    segs.push([t, 0.6, 0]); t += 0.6;   // rest at the bottom before relaunch
+    for (var i = 0; i < segs.length; i++) { segs[i][0] /= t; segs[i][1] /= t; }
+    return segs;
+  })();
+  function ballH(u) {
+    for (var i = 0; i < BALL_SEG.length; i++) {
+      var s = BALL_SEG[i];
+      if (u < s[0] + s[1]) { var q = (u - s[0]) / s[1]; return s[2] * 4 * q * (1 - q); }
+    }
+    return 0;
+  }
+  var PAT_LIST = [
+    ['lagoon', 'Lagoon'], ['matrix', 'Matrix'], ['comets', 'Comets'],
+    ['swirl', 'Swirl'], ['plasma', 'Plasma'], ['pulse', 'Center pulse'], ['ripples', 'Ripples'],
+    ['waves', 'Waves'], ['rain', 'Rain'], ['rainbowSpin', 'Rainbow spin'], ['rainbowRise', 'Rainbow rise'],
+    ['balls', 'Bouncy balls'], ['fire', 'Fire'], ['storm', 'Storm'], ['ants', 'Ants'],
+    ['twinkle', 'Twinkle'], ['dazzle', 'Dazzle'], ['chase', 'Chase'], ['aurora', 'Aurora'],
+    ['breathe', 'Breathe'], ['strobe', 'Strobe'], ['ice', 'Ice']
+  ];
+  var PATTERNS = {
+    lagoon: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(st.hue / 360, 0.8, 0.28 + 0.62 * (0.5 + 0.5 * Math.sin(T * 0.8 + k * 0.33 + st.phase)), out);
+    },
+    rainbowSpin: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(Math.atan2(wx, wz) / 6.2832 + T * 0.06, 1, 0.8, out);
+    },
+    rainbowRise: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(wy / H * 1.1 - T * 0.07, 1, 0.8, out);
+    },
+    swirl: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(Math.atan2(wx, wz) / 6.2832 + wy / H * 0.6 + T * 0.08, 0.95, 0.8, out);
+    },
+    plasma: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = Math.sin(wx * 0.8 + T) + Math.sin(wz * 0.8 + T * 1.3) + Math.sin(wy * 0.6 + T * 0.7);
+      h2rgb(v / 6 + 0.5 + T * 0.02, 0.9, 0.55 + 0.3 * Math.sin(v * 2 + T), out);
+    },
+    pulse: function (t, k, si, st, wx, wy, wz, T, out) {
+      // rings breathing outward from the middle of the room
+      var d = Math.hypot(wx, (wy - H * 0.35) * 0.9, wz) / Math.hypot(R, H * 0.6);
+      var g = Math.exp(-Math.pow((d - (T * 0.45) % 1) * 6, 2));
+      h2rgb(0.52, 0.75, 0.05 + 0.95 * g, out);
+    },
+    ripples: function (t, k, si, st, wx, wy, wz, T, out) {
+      var d = Math.hypot(wx, (wy - H * 0.35) * 0.9, wz) / Math.hypot(R, H * 0.6);
+      var v = 0.5 + 0.5 * Math.sin(d * 9 - T * 2.2);
+      h2rgb(0.55, 0.8, 0.06 + 0.65 * v * v, out);
+    },
+    waves: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0.5 + 0.5 * Math.sin(wy * 1.6 - T * 2.5);
+      h2rgb(0.5, 0.55, 0.08 + 0.8 * v * v, out);
+    },
+    rain: function (t, k, si, st, wx, wy, wz, T, out) {
+      var head = ((T * 0.9 + hash1(si * 7.3) * 3) % 1.2) / 1.2 * 1.15;
+      var e = head - t;
+      h2rgb(0.5, 0.7, e >= 0 && e < 0.5 ? Math.exp(-e * 9) : 0.02, out);
+    },
+    matrix: function (t, k, si, st, wx, wy, wz, T, out) {
+      var head = ((T * (0.7 + hash1(si * 3.1) * 0.7) + hash1(si * 7.3) * 3) % 1.3) / 1.3 * 1.2;
+      var e = head - t;
+      var v = e >= 0 && e < 0.6 ? Math.exp(-e * 7) : 0.03;
+      h2rgb(0.36, 0.95, v * (0.55 + 0.45 * hash1(k * 3.7 + Math.floor(T * 9) * 13.1)), out);
+    },
+    comets: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T * 0.5 + hash1(si * 13.7) * 4) % 4;
+      if (cyc > 1.2) { h2rgb(0.12, 0.3, 0.02, out); return; }
+      var e = cyc / 1.2 - t;
+      h2rgb(0.12, 0.35, e >= 0 && e < 0.4 ? Math.exp(-e * 11) : 0.02, out);
+    },
+    balls: function (t, k, si, st, wx, wy, wz, T, out) {
+      // GlitchWick: a ball per string, gravity arcs with halving bounces, bouncing at the tip
+      var tb = 1 - ballH((T / 3.4 + hash1(si * 3.3)) % 1) * 0.92;
+      var dd = t - tb;
+      h2rgb(hash1(si * 5.13), 0.85, 0.03 + Math.exp(-dd * dd * 800), out);
+    },
+    fire: function (t, k, si, st, wx, wy, wz, T, out) {
+      // hanging embers: hotter + more flicker toward the tip
+      var f0 = Math.floor(T * 7), fu = T * 7 - f0;
+      var fl = hash1(k * 13.7 + si * 91.3 + f0 * 77.7) * (1 - fu) + hash1(k * 13.7 + si * 91.3 + (f0 + 1) * 77.7) * fu;
+      var heat = (0.35 + 0.65 * t) * (0.45 + 0.55 * fl);
+      h2rgb(0.015 + 0.08 * heat, 1, Math.min(1, 0.15 + heat), out);
+    },
+    storm: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T * 0.7);
+      var v = 0.05, s = 0.8;
+      if (hash1(si * 31.7 + s0 * 11.3) > 0.88) {
+        var fp = T * 0.7 - s0;
+        v += (1 - fp) * (1 - fp) * (0.55 + 0.45 * hash1(k * 0.7 + Math.floor(T * 30) * 3.3));
+        s = 0.12;
+      }
+      h2rgb(0.6, s, Math.min(1, v), out);
+    },
+    ants: function (t, k, si, st, wx, wy, wz, T, out) {
+      var on = ((k - Math.floor(T * 10)) % 7 + 7) % 7 < 2;
+      h2rgb(0.08, 0.9, on ? 0.85 : 0.04, out);
+    },
+    twinkle: function (t, k, si, st, wx, wy, wz, T, out) {
+      var p = hash1(k * 7.7 + si * 131.3);
+      var tw = 0.5 + 0.5 * Math.sin(T * (2 + p * 3) + p * 40);
+      h2rgb(0.13, 0.15, 0.03 + 0.9 * Math.pow(tw, 6), out);
+    },
+    dazzle: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cell = Math.floor(T * 7);
+      var rr = hash1(k * 3.3 + si * 17.1 + cell * 97.7);
+      if (rr > 0.72) h2rgb(hash1(k * 1.1 + cell * 31.7), 1, 1, out);
+      else { out[0] = out[1] = out[2] = 0.02; }
+    },
+    chase: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(si * 0.13 + T * 0.18, 1, 0.75, out);
+    },
+    aurora: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz);
+      var n = Math.sin(ang * 2.5 + T * 0.25) + Math.sin(wy * 0.5 - T * 0.18) + Math.sin((ang + wy) * 1.2 + T * 0.11);
+      h2rgb(0.36 + 0.12 * Math.sin(n * 1.7), 0.85, 0.12 + 0.5 * Math.abs(Math.sin(n)), out);
+    },
+    breathe: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(0.09, 0.75, 0.18 + 0.6 * (0.5 + 0.5 * Math.sin(T * 0.35)), out);
+    },
+    strobe: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = (T * 2.6) % 1 < 0.12 ? 1 : 0.015;
+      out[0] = out[1] = out[2] = v;
+    },
+    ice: function (t, k, si, st, wx, wy, wz, T, out) {
+      var p = hash1(k * 7.7 + si * 131.3);
+      var v = 0.22 + 0.3 * Math.abs(Math.sin(T * 0.5 + p * 6)) + 0.45 * Math.pow(0.5 + 0.5 * Math.sin(T * (2 + p) + p * 30), 8);
+      h2rgb(0.56, 0.45, v, out);
+    }
+  };
+
+  function drawGuides(alpha) {
+    ctx.save();
+    var id = guideId, i;
+    if (id === 'hlo' || id === 'hhi') {
+      var gh = id === 'hlo' ? P.hlo : P.hhi;
+      guideRing(gh, alpha, 0);
+      // dashed drop to the floor at the camera-facing point + the ring-to-floor measurement
+      var gr = coneR(gh) * 0.97, fx = gr * Math.sin(cam.az), fz = gr * Math.cos(cam.az);
+      if (proj(fx, gh, fz, pr) && proj(fx, 0, fz, pr2)) {
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = 'rgba(' + G_RED + ',' + 0.8 * alpha + ')'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
+        ctx.setLineDash([]);
+        guideLabel((pr[0] + pr2[0]) / 2 + 8, (pr[1] + pr2[1]) / 2, fmtFt(gh) + ' to floor', alpha);
+      }
+    } else if (id === 'floorGap') {
+      // filled disc at the gap height; dots where hanging tips actually reach it
+      guideRing(P.floorGap, alpha, 0.14 * alpha);
+      ctx.fillStyle = 'rgba(' + G_RED + ',' + alpha + ')';
+      for (i = 0; i < strings.length; i++) {
+        var st = strings[i];
+        if (st.role === 'spiral') continue;
+        var bi = (st.n - 1) * 3, by = st.pts[bi + 1];
+        if (Math.abs(by - P.floorGap) < 0.25 && proj(st.pts[bi], by, st.pts[bi + 2], pr)) {
+          ctx.beginPath(); ctx.arc(pr[0], pr[1], 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      for (i = 0; i < vines.length; i++) {
+        var tip = vines[i].pts[vines[i].pts.length - 1];
+        if (Math.abs(tip[1] - P.floorGap) < 0.25 && proj(tip[0], tip[1], tip[2], pr)) {
+          ctx.beginPath(); ctx.arc(pr[0], pr[1], 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      var fgr = coneR(P.floorGap) * 0.97;
+      if (proj(fgr * Math.sin(cam.az), P.floorGap, fgr * Math.cos(cam.az), pr)) {
+        guideLabel(pr[0] + 8, pr[1] - 8, fmtFt(P.floorGap), alpha);
+      }
+    } else if (id === 'mainLen' && layout === 'spiral') {
+      for (i = 0; i < vines.length; i++) {
+        if (vines[i].kind === 'spiral') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 4);
+      }
+    } else if (id === 'dropDensity' && layout === 'spiral') {
+      for (i = 0; i < vines.length; i++) {
+        if (vines[i].kind === 'drop') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 3);
+      }
+    } else if (id === 'lmin') {
+      // green: the guaranteed minimum run below every vertical vine's attachment point
+      for (i = 0; i < vines.length; i++) {
+        var vm2 = vines[i];
+        if (!vm2.anchor) continue;
+        guideVertical(vm2.anchor[0], vm2.anchor[1], Math.max(vm2.anchor[1] - P.lmin, P.floorGap), vm2.anchor[2],
+                      'rgba(' + G_GREEN + ',' + 0.85 * alpha + ')', 2.5);
+      }
+    } else if (id === 'lmax') {
+      // translucent red: how long each vertical vine could get at this max (floor gap still wins)
+      for (i = 0; i < vines.length; i++) {
+        var vx2 = vines[i];
+        if (!vx2.anchor) continue;
+        guideVertical(vx2.anchor[0], vx2.anchor[1], Math.max(vx2.anchor[1] - P.lmax, P.floorGap), vx2.anchor[2],
+                      'rgba(' + G_RED + ',' + 0.4 * alpha + ')', 3);
+      }
+    }
+    ctx.restore();
+  }
+
+  // ---- per-object draw functions (called in depth-sorted order by drawScene) ----
+  function drawPole(i) {
+    var pp = poles[i], nY = (R - HOLE_R) / H;
+    var pFacing = Math.sin(pp.a) * (C[0] - pp.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pp.a) * (C[2] - pp.b[2]);
+    var pcol = pFacing < 0 ? 'rgba(99,78,53,0.95)' : 'rgba(72,58,42,0.45)';
+    ctx.lineCap = 'round';
+    // solid front wall: near-pole shafts are hidden behind the fabric, but their spikes still
+    // rise above the apex — draw only the spike
+    var shaftHidden = pFacing >= 0 && P.wallSolid;
+    if (!shaftHidden) {
+      // shaft base -> collar as ONE filled polygon with a per-sample width: a smooth
+      // perspective taper with no per-segment stroke joints banding up the pole
+      var run = [];
+      for (var pj = 0; pj <= 8; pj++) {
+        var tt = pj / 8;
+        if (proj(pp.b[0] + (pp.c[0] - pp.b[0]) * tt, pp.b[1] + (pp.c[1] - pp.b[1]) * tt,
+                 pp.b[2] + (pp.c[2] - pp.b[2]) * tt, pr)) {
+          run.push([pr[0], pr[1], Math.max(0.75, Math.min(15, pr[2] * POLE_D / 2))]);
+        } else if (run.length) break;   // keep the contiguous visible stretch (walk-mode near plane)
+      }
+      if (run.length >= 2) {
+        var lsd = [], rsd = [];
+        for (var ri = 0; ri < run.length; ri++) {
+          var rA = run[Math.max(0, ri - 1)], rB = run[Math.min(run.length - 1, ri + 1)];
+          var rdx = rB[0] - rA[0], rdy = rB[1] - rA[1];
+          var rdl = Math.hypot(rdx, rdy) || 1;
+          var rnx = -rdy / rdl * run[ri][2], rny = rdx / rdl * run[ri][2];
+          lsd.push([run[ri][0] + rnx, run[ri][1] + rny]);
+          rsd.push([run[ri][0] - rnx, run[ri][1] - rny]);
+        }
+        ctx.beginPath();
+        ctx.moveTo(lsd[0][0], lsd[0][1]);
+        for (ri = 1; ri < lsd.length; ri++) ctx.lineTo(lsd[ri][0], lsd[ri][1]);
+        for (ri = rsd.length - 1; ri >= 0; ri--) ctx.lineTo(rsd[ri][0], rsd[ri][1]);
+        ctx.closePath();
+        ctx.fillStyle = pcol;
+        ctx.fill();
+      }
+    }
+    // spike above the collar: the real-tipi pole spray. Stays through normal tilting and only
+    // fades right where it would start overlapping the canvas from overhead. From below the
+    // opaque canvas hides it completely (never draw the spray through the fabric).
+    var sa = Math.max(0, Math.min(1, 1 - (cam.el - 0.55) / 0.25))
+           * Math.max(0, Math.min(1, (C[1] - 0.5) / 1.5));
+    if (sa > 0.01 && proj(pp.c[0], pp.c[1], pp.c[2], pr) && proj(pp.t[0], pp.t[1], pp.t[2], pr2)) {
+      ctx.save();
+      ctx.globalAlpha = sa;
+      // one filled polygon: holds near-full shaft width for the first two-thirds, then
+      // tapers to a sharp point over the last stretch
+      var sdx2 = pr2[0] - pr[0], sdy2 = pr2[1] - pr[1];
+      var sdl2 = Math.hypot(sdx2, sdy2) || 1;
+      var shw = Math.max(0.75, Math.min(15, pr[2] * POLE_D / 2));   // matches the shaft at the collar
+      var snx = -sdy2 / sdl2 * shw, sny = sdx2 / sdl2 * shw;
+      var qx = pr[0] + sdx2 * 0.66, qy = pr[1] + sdy2 * 0.66;       // shoulder: taper starts here
+      var qnx = snx * 0.85, qny = sny * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(pr[0] + snx, pr[1] + sny);
+      ctx.lineTo(qx + qnx, qy + qny);
+      ctx.lineTo(pr2[0], pr2[1]);
+      ctx.lineTo(qx - qnx, qy - qny);
+      ctx.lineTo(pr[0] - snx, pr[1] - sny);
+      ctx.closePath();
+      ctx.fillStyle = shaftHidden ? 'rgba(99,78,53,0.95)' : pcol;   // exterior spikes read solid
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawMat(mi) {
+    // fade mats out quickly as the camera drops below the floor (don't show their undersides)
+    var matFade = Math.max(0, Math.min(1, 1 + cam.el / 0.2));
+    if (matFade <= 0.001) return;
+    ctx.globalAlpha = matFade;
+    var mt = mats[mi], mo = mt.o, mcols = MAT_COLS[mt.col], i;
+    ctx.fillStyle = mcols[1];
+    for (i = 0; i < mo.length; i++) {
+      var pA = mo[i], pB = mo[(i + 1) % mo.length];
+      var mnx = pB[1] - pA[1], mnz = pA[0] - pB[0];
+      var mxm = (pA[0] + pB[0]) / 2, mzm = (pA[1] + pB[1]) / 2;
+      if (mnx * (C[0] - mxm) + mnz * (C[2] - mzm) <= 0) continue;
+      if (proj(pA[0], MATS.T, pA[1], pr) && proj(pB[0], MATS.T, pB[1], pr2) &&
+          proj(pB[0], 0.02, pB[1], pr3) && proj(pA[0], 0.02, pA[1], pr4)) {
+        ctx.beginPath();
+        ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]);
+        ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.beginPath(); var mFirst = true;
+    for (i = 0; i < mo.length; i++) {
+      if (proj(mo[i][0], MATS.T, mo[i][1], pr)) {
+        if (mFirst) { ctx.moveTo(pr[0], pr[1]); mFirst = false; } else ctx.lineTo(pr[0], pr[1]);
+      }
+    }
+    if (!mFirst) { ctx.closePath(); ctx.fillStyle = mcols[0]; ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+  function drawVine(v) {
+    ctx.lineCap = 'round';
+    var pts = vines[v].pts, i;
+    ctx.beginPath(); var started = false, sc = 0;
+    for (i = 0; i < pts.length; i++) {
+      if (proj(pts[i][0], pts[i][1], pts[i][2], pr)) {
+        if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
+        sc = pr[2];
+      }
+    }
+    ctx.strokeStyle = 'rgba(74,88,52,' + (0.6 * depthAlpha(sc)) + ')';
+    ctx.lineWidth = Math.max(1, sc * 0.004);
+    ctx.stroke();
+    var leaves = vines[v].leaves;
+    for (i = 0; i < leaves.length; i++) {
+      var lf = leaves[i];
+      if (proj(lf.x, lf.y, lf.z, pr) &&
+          proj(lf.x + lf.ux, lf.y + lf.uy, lf.z + lf.uz, pr2) &&
+          proj(lf.x + lf.ux * 0.5 + lf.vx * 0.42, lf.y + lf.uy * 0.5 + lf.vy * 0.42, lf.z + lf.uz * 0.5 + lf.vz * 0.42, pr3) &&
+          proj(lf.x + lf.ux * 0.5 - lf.vx * 0.42, lf.y + lf.uy * 0.5 - lf.vy * 0.42, lf.z + lf.uz * 0.5 - lf.vz * 0.42, pr4)) {
+        ctx.globalAlpha = 0.85 * depthAlpha(pr[2]);
+        ctx.fillStyle = LEAF_SHADES[lf.sh];
+        ctx.beginPath();
+        ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.lineTo(pr4[0], pr4[1]);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  function drawPerson(pi) {
+    var pe = PEOPLE[pi], fg = pe.data;
+    var fhx = bF[0], fhz = bF[2], fhl = Math.hypot(fhx, fhz) || 1e-3;
+    var rgx = fhz / fhl, rgz = -fhx / fhl;   // billboard left-right (horizontal)
+    var Dx = fhx / fhl, Dz = fhz / fhl;      // depth axis = horizontal camera facing
+    var SLC = 21;
+    var maxRad = coneR(pe.h) - 0.4 - fg.halfW * pe.h;
+    var prad = Math.max(0.6, Math.min(pe.radF * R, maxRad));
+    var pX = prad * Math.sin(pe.ang), pZ = prad * Math.cos(pe.ang);
+    // face-on, the slice slab gives the cutout a solid edge; from steep overhead/underneath
+    // angles the same fan smears sideways into lobed double-exposure blobs. A real cutout
+    // thins toward its pure silhouette as the view verticalizes, so collapse the thickness.
+    var steep = Math.abs(bF[1]);
+    var TH = 0.06 * pe.h * (1 - 0.85 * steep * steep), rN = TH / 2 / pe.h;
+    // projected px gap between adjacent slices: ~0 face-on, grows as the view goes overhead.
+    // Each slice is stroked at this width so the stack always reads as one solid, never bands.
+    var gapPx = 0;
+    if (proj(pX - Dx * TH / 2, fg.cy * pe.h, pZ - Dz * TH / 2, pr) &&
+        proj(pX + Dx * TH / 2, fg.cy * pe.h, pZ + Dz * TH / 2, pr2)) {
+      gapPx = Math.hypot(pr2[0] - pr[0], pr2[1] - pr[1]) / (SLC - 1);
+    }
+    var order = [];
+    for (var k = 0; k < SLC; k++) {
+      var tau = (k / (SLC - 1)) * 2 - 1, dz = (TH / 2) * tau;
+      order.push([tau, dz, (pX + Dx * dz - C[0]) * bF[0] + (pZ + Dz * dz - C[2]) * bF[2]]);
+    }
+    order.sort(function (a, b) { return b[2] - a[2]; });
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    var bad = false;
+    for (var si = 0; si < SLC && !bad; si++) {
+      var tau2 = order[si][0], dz2 = order[si][1];
+      var ins = rN * (1 - Math.sqrt(Math.max(0, 1 - tau2 * tau2)));
+      var lt = 24 + 22 * (si / (SLC - 1));
+      ctx.fillStyle = 'rgb(' + ((lt * 0.82) | 0) + ',' + ((lt * 1.02 + 6) | 0) + ',' + ((lt * 1.1 + 9) | 0) + ')';
+      ctx.beginPath();
+      for (var li = 0; li < fg.loops.length; li++) {
+        var loop = fg.loops[li], nrm = fg.norms[li], started = false;
+        for (var q = 0; q < loop.length; q++) {
+          var ox = (loop[q][0] + nrm[q][0] * ins) * pe.h;
+          var oy = (loop[q][1] + nrm[q][1] * ins) * pe.h + 0.02;
+          if (!proj(pX + rgx * ox + Dx * dz2, oy, pZ + rgz * ox + Dz * dz2, pr)) { bad = true; break; }
+          if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
+        }
+        if (bad) break;
+        ctx.closePath();
+      }
+      if (!bad) {
+        ctx.fill('evenodd');
+        if (gapPx > 0.6) {   // bridge to the neighbouring slice so the stack is watertight
+          ctx.strokeStyle = ctx.fillStyle;
+          ctx.lineWidth = gapPx * 1.3;
+          ctx.stroke();
+        }
+      }
+    }
+    // height label worn on the chest (~72% of height; less for big-headed kids/toddlers),
+    // centred on the body's actual visual middle (stances aren't symmetric about the anchor)
+    var lcx = (fg.cx || 0) * pe.h;
+    if (!bad && proj(pX + rgx * lcx, pe.h * (pe.chest || 0.72), pZ + rgz * lcx, pr2)) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(217,230,226,0.85)';
+      ctx.fillText(pe.label, pr2[0], pr2[1]);
+      ctx.textAlign = 'left';
+    }
+  }
+  function drawBanana() {
+    var bAng = 2.9, bRad = Math.min(2.6, R * 0.35), bDir = 0.8, i;
+    var bx = bRad * Math.sin(bAng), bz = bRad * Math.cos(bAng);
+    var dS = Math.sin(bDir), dC = Math.cos(bDir);
+    var bN = 10, bP = [];
+    for (i = 0; i < bN; i++) {
+      var bt = i / (bN - 1) * 2 - 1;
+      var w0 = 0.05 * (0.35 + 0.65 * Math.sqrt(Math.max(0, 1 - bt * bt)));
+      var wx = bx + bt * 0.30 * dS + (1 - bt * bt) * 0.10 * dC;
+      var wz = bz + bt * 0.30 * dC - (1 - bt * bt) * 0.10 * dS;
+      if (proj(wx, w0 + 0.01, wz, pr)) bP.push([pr[0], pr[1], pr[2] * w0 * 2]);
+    }
+    if (bP.length > 3) {
+      ctx.lineCap = 'round';
+      for (var pass = 0; pass < 3; pass++) {
+        ctx.strokeStyle = pass === 0 ? '#cdb244' : (pass === 1 ? 'rgba(240,224,140,0.85)' : 'rgba(110,88,30,0.55)');
+        for (i = 0; i < bP.length - 1; i++) {
+          var wpx = (bP[i][2] + bP[i + 1][2]) / 2;
+          var oy = pass === 1 ? -wpx * 0.22 : (pass === 2 ? wpx * 0.3 : 0);
+          ctx.lineWidth = Math.max(1, pass === 0 ? wpx : (pass === 1 ? wpx * 0.45 : wpx * 0.35));
+          ctx.beginPath();
+          ctx.moveTo(bP[i][0], bP[i][1] + oy);
+          ctx.lineTo(bP[i + 1][0], bP[i + 1][1] + oy);
+          ctx.stroke();
+        }
+      }
+      var tipA = bP[bP.length - 1], tipB = bP[0];
+      ctx.fillStyle = '#54401f';
+      ctx.beginPath(); ctx.arc(tipA[0], tipA[1], Math.max(1, tipA[2] * 0.28), 0, 7); ctx.fill();
+      if (proj(bx - 0.34 * dS, 0.035, bz - 0.34 * dC, pr)) {
+        ctx.strokeStyle = '#6b5427'; ctx.lineWidth = Math.max(1.5, tipB[2] * 0.3);
+        ctx.beginPath(); ctx.moveTo(tipB[0], tipB[1]); ctx.lineTo(pr[0], pr[1]); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(126,147,142,0.75)';
+      ctx.fillText('7.5"', tipA[0] + 7, tipA[1] - 4);
+    }
+  }
+
+  // the door opening's projected outline (single source of truth for far door, ghost front,
+  // and the solid-wall cutout): shallow wide bottom, wide domed top, sides tilting in a touch
+  function doorPts24() {
+    var dwHalf = Math.min(0.16, Math.PI * 2 / NPOLES * 0.38);
+    var out = [];
+    for (var i = 0; i <= 24; i++) {
+      var dth = i / 24 * Math.PI * 2;
+      var dcs = Math.cos(dth), dsn = Math.sin(dth);
+      var dh = 2.3 + (dcs >= 0 ? 2.0 : 1.7) * dcs;
+      var hn = (dh - 0.6) / 3.7;
+      var dw = dwHalf * (dsn >= 0 ? 1 : -1) * Math.pow(Math.abs(dsn), 0.62) * (1.06 - 0.34 * hn);
+      var drr = coneR(dh) * 1.01;
+      if (proj(drr * Math.sin(DOOR_A + dw), dh, drr * Math.cos(DOOR_A + dw), pr)) out.push([pr[0], pr[1]]);
+    }
+    return out;
+  }
+
+  function drawScene(time) {
+    updateCam();
+    // Day-night master: 0 = night, 1 = day. Coordinates the sky/ground ambience, the canvas
+    // glow, eye-adapted LED brightness, and how strongly the LEDs influence the walls.
+    var dayF = (P.dayNight == null ? 0.12 : P.dayNight / 100);
+    function lerpC(n, d) { return (n + (d - n) * dayF) | 0; }
+    // pattern/brightness context — shared by the LED pass and the surface light tinting.
+    // Eye adaptation: the same LED power reads brighter to dark-adapted eyes at night.
+    var briF = P.bri / 100 * (1 + 0.35 * (1 - dayF));
+    var patmul = patMulFromSpeed(P.patSpeed);
+    var patT = time * patmul;
+    var patFn = PATTERNS[pattern] || PATTERNS.lagoon;
+    var rgbv = [0, 0, 0];
+    // pre-sample each lit string's average pattern colour: the light cast is painted INTO the
+    // floor and wall surfaces below (never composited over the scene as floating glow)
+    var casts = null;
+    if (P.lightCast) {
+      casts = [];
+      for (var ci2 = 0; ci2 < strings.length; ci2++) {
+        var cst = strings[ci2];
+        var crole = cst.role || 'radial';
+        if (crole === 'spiral' ? !P.spiralLeds : !P.ledStrings) continue;   // verticals + drops share one toggle
+        var car = 0, cag = 0, cab = 0;
+        for (var tap = 0; tap < 3; tap++) {
+          var kk = Math.min(cst.n - 1, ((cst.n - 1) * (0.2 + 0.3 * tap)) | 0);
+          patFn(cst.n > 1 ? kk / (cst.n - 1) : 0, kk, ci2, cst, cst.pts[kk * 3], cst.pts[kk * 3 + 1], cst.pts[kk * 3 + 2], patT, rgbv);
+          car += rgbv[0]; cag += rgbv[1]; cab += rgbv[2];
+        }
+        car /= 3; cag /= 3; cab /= 3;
+        var camp = (car + cag + cab) / 3 * briF;
+        if (camp < 0.02) continue;
+        casts.push({ st: cst, role: crole, r: (car * 255) | 0, g: (cag * 255) | 0, b: (cab * 255) | 0, amp: camp });
+      }
+      if (!casts.length) casts = null;
+    }
+    // edge-light layout (hoisted above the surface passes so its light cast can paint the
+    // floor edge and canvas hem; the bays themselves still render in the depth-sorted pass)
+    var ropeP = null;
+    if (P.rope) {
+      var hm = P.ropeH, drp = P.ropeDrape;
+      var spFt = Math.max(0.04, (P.ropeSp || 1) / 12); // pixel spacing, inches -> ft
+      var rm = coneR(hm) * 0.97, rstep = Math.PI * 2 / NPOLES;
+      // numeric swag arc length per bay (incl. ground clamp) -> dot count from spacing
+      var swagLen = 0, lx = 0, ly = 0, lz = 0;
+      for (var s2 = 0; s2 <= 12; s2++) {
+        var st2 = s2 / 12;
+        var sxx = rm * Math.sin(st2 * rstep), syy = Math.max(0.08, hm - drp * Math.sin(Math.PI * st2)), szz = rm * Math.cos(st2 * rstep);
+        if (s2 > 0) swagLen += Math.hypot(sxx - lx, syy - ly, szz - lz);
+        lx = sxx; ly = syy; lz = szz;
+      }
+      ropeP = { hm: hm, drp: drp, rm: rm, rstep: rstep,
+                dots: Math.max(2, Math.min(400, Math.round(swagLen / spFt))),
+                aScale: Math.min(1, spFt / 0.17) };
+    }
+    // per-bay edge-light cast colour: the perimeter light rims the floor edge and the canvas
+    // hem — warm amber as rope light, pattern-sampled when the edge runs the LED string
+    var edgeCast = (P.lightCast && ropeP) ? [] : null;
+    var edgeHF = 0;
+    if (edgeCast) {
+      // mounted low it pours onto the floor; mounted high the rim light thins out
+      edgeHF = 1 / (1 + Math.max(0, ropeP.hm) * 0.8);
+      for (var eb2 = 0; eb2 < NPOLES; eb2++) {
+        var ecr, ecg, ecb, ecAmp;
+        var ebA = eb2 * ropeP.rstep + 0.12 + ropeP.rstep / 2;
+        if (edgeMode === 'led') {
+          var eSt2 = { hue: 168, phase: eb2 * 0.7 };
+          var esr = 0, esg = 0, esb = 0;
+          for (var etp = 0; etp < 3; etp++) {
+            patFn((eb2 + (etp + 0.5) / 3) / NPOLES, eb2 * 7 + etp * 3, 900 + eb2, eSt2,
+                  ropeP.rm * Math.sin(ebA), ropeP.hm, ropeP.rm * Math.cos(ebA), patT, rgbv);
+            esr += rgbv[0]; esg += rgbv[1]; esb += rgbv[2];
+          }
+          ecr = (esr / 3 * 255 * briF) | 0; ecg = (esg / 3 * 255 * briF) | 0; ecb = (esb / 3 * 255 * briF) | 0;
+          ecAmp = (esr + esg + esb) / 9 * briF;
+        } else {
+          ecr = 228; ecg = 170; ecb = 100; ecAmp = 0.75 * ropeP.aScale;
+        }
+        if (ecAmp < 0.02) continue;
+        edgeCast.push({ bay: eb2, a: ebA, r: ecr, g: ecg, b: ecb, amp: ecAmp });
+      }
+      if (!edgeCast.length) edgeCast = null;
+    }
+    // sky
+    var g = ctx.createLinearGradient(0, 0, 0, Hpx);
+    g.addColorStop(0, 'rgb(' + lerpC(7, 52) + ',' + lerpC(13, 80) + ',' + lerpC(17, 98) + ')');
+    g.addColorStop(1, 'rgb(' + lerpC(11, 56) + ',' + lerpC(18, 82) + ',' + lerpC(14, 66) + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, Wpx, Hpx);
+
+    // dirt apron around the tipi: stacked translucent discs accumulate toward the tipi edge and
+    // fade out with distance; hidden once the camera dips below ground (like the mats)
+    var groundFade = Math.max(0, Math.min(1, 1 + cam.el / 0.2));
+    if (groundFade > 0.01) {
+      ctx.fillStyle = 'rgba(' + lerpC(30, 124) + ',' + lerpC(24, 101) + ',' + lerpC(16, 72) + ',' + (0.16 * groundFade).toFixed(3) + ')';
+      for (var db = 0; db < 10; db++) {
+        var drr3 = R + 6 - db * 0.6;   // 6 ft apron, fully faded by its outer edge
+        ctx.beginPath();
+        var okD = false;
+        for (i = 0; i <= 44; i++) {
+          var da2 = i / 44 * Math.PI * 2;
+          if (proj(drr3 * Math.sin(da2), 0, drr3 * Math.cos(da2), pr)) {
+            if (!okD) { ctx.moveTo(pr[0], pr[1]); okD = true; } else ctx.lineTo(pr[0], pr[1]);
+          }
+        }
+        ctx.closePath();
+        if (okD) ctx.fill();
+      }
+    }
+
+    // ground disc
+    ctx.beginPath();
+    var first = true;
+    for (var i = 0; i <= 44; i++) {
+      var a = i / 44 * Math.PI * 2;
+      if (proj(R * Math.sin(a), 0, R * Math.cos(a), pr)) {
+        if (first) { ctx.moveTo(pr[0], pr[1]); first = false; } else ctx.lineTo(pr[0], pr[1]);
+      }
+    }
+    // green canvas floor (matches the real groundcloth) — solid and clearly readable at night
+    ctx.closePath(); ctx.fillStyle = 'rgb(' + lerpC(21, 62) + ',' + lerpC(36, 106) + ',' + lerpC(27, 76) + ')'; ctx.fill();
+    // LED pools tint the floor surface itself: clipped to the disc and drawn beneath
+    // everything, so looking across the floor they read as lit ground — never as haze
+    if (casts || edgeCast) {
+      ctx.save();
+      ctx.clip();   // the ground-disc path is still current
+      ctx.globalCompositeOperation = 'lighter';
+      if (casts) for (var pi2 = 0; pi2 < casts.length; pi2++) {
+        var cc = casts[pi2];
+        if (cc.role !== 'radial' && cc.role !== 'drop') continue;
+        if (!proj(cc.st.anchor[0], 0.02, cc.st.anchor[2], pr)) continue;
+        // pebble pixels emit SIDEWAYS — no downward cone. The floor just picks up a broad,
+        // faint ambient tint around each hang, not a bright pool.
+        var rpx = (2.6 + cc.st.L * 0.2) * pr[2];
+        if (rpx < 2) continue;
+        var fpa = (0.035 + 0.045 * (1 - dayF)) * cc.amp;
+        ctx.translate(pr[0], pr[1]); ctx.scale(1, 0.42);
+        var fgr2 = ctx.createRadialGradient(0, 0, 0, 0, 0, rpx);
+        fgr2.addColorStop(0, 'rgba(' + cc.r + ',' + cc.g + ',' + cc.b + ',' + fpa.toFixed(3) + ')');
+        fgr2.addColorStop(0.55, 'rgba(' + cc.r + ',' + cc.g + ',' + cc.b + ',' + (fpa * 0.5).toFixed(3) + ')');
+        fgr2.addColorStop(1, 'rgba(' + cc.r + ',' + cc.g + ',' + cc.b + ',0)');
+        ctx.fillStyle = fgr2;
+        ctx.fillRect(-rpx, -rpx, rpx * 2, rpx * 2);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      // edge light rims the floor perimeter: one overlapping blob per bay -> a soft ring
+      if (edgeCast) for (var ei2 = 0; ei2 < edgeCast.length; ei2++) {
+        var ec = edgeCast[ei2];
+        if (!proj(ropeP.rm * Math.sin(ec.a), 0.02, ropeP.rm * Math.cos(ec.a), pr)) continue;
+        var erx = ropeP.rstep * ropeP.rm * 0.8 * pr[2];
+        if (erx < 2) continue;
+        var efa = (0.05 + 0.075 * (1 - dayF)) * ec.amp * edgeHF;
+        ctx.translate(pr[0], pr[1]); ctx.scale(1, 0.42);
+        var egr = ctx.createRadialGradient(0, 0, 0, 0, 0, erx);
+        egr.addColorStop(0, 'rgba(' + ec.r + ',' + ec.g + ',' + ec.b + ',' + efa.toFixed(3) + ')');
+        egr.addColorStop(0.55, 'rgba(' + ec.r + ',' + ec.g + ',' + ec.b + ',' + (efa * 0.5).toFixed(3) + ')');
+        egr.addColorStop(1, 'rgba(' + ec.r + ',' + ec.g + ',' + ec.b + ',0)');
+        ctx.fillStyle = egr;
+        ctx.fillRect(-erx, -erx, erx * 2, erx * 2);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      ctx.restore();
+    }
+
+    // far-side fabric facets (cutaway: near side is left open)
+    // canvas: night weave -> daylight/backlight glowing warm through the fabric
+    var cvR = 56 + (232 - 56) * dayF, cvG = 59 + (214 - 59) * dayF, cvB = 50 + (170 - 50) * dayF;
+    var nY = (R - HOLE_R) / H; // upward tilt of the cone's outward surface normal
+    for (i = 0; i < NPOLES; i++) {
+      var a1 = i / NPOLES * Math.PI * 2 + 0.12, a2 = (i + 1) / NPOLES * Math.PI * 2 + 0.12;
+      var am = (a1 + a2) / 2;
+      var cyM = HOLE_H * 0.5, rMf = coneR(cyM);
+      var cxm = rMf * Math.sin(am), czm = rMf * Math.cos(am);
+      // full 3D facing test: from below/inside, every facet reads as interior canvas;
+      // from outside-horizontal the near side cuts away; from straight above, plan view
+      var facing = Math.sin(am) * (C[0] - cxm) + nY * (C[1] - cyM) + Math.cos(am) * (C[2] - czm);
+      var isBack = facing < 0;
+      if (!isBack) continue;   // the near side never draws here: ghost/solid fronts are late passes
+      var lit = 0.92 + 0.08 * Math.sin(am * 3);   // subtle per-facet weave shading
+      // vertical slices so a facet partially behind the camera still renders its
+      // visible portion (whole-quad culling made all walls vanish from inside)
+      for (var seg = 0; seg < 5; seg++) {
+        // slight overlap between slices hides seams — no strokes, so no horizontal lines
+        var fy0 = HOLE_H * seg / 5 - (seg ? 0.06 : 0), fy1 = HOLE_H * (seg + 1) / 5;
+        var fr0 = coneR(Math.max(0, fy0)), fr1 = coneR(fy1);
+        if (!(proj(fr0 * Math.sin(a1), fy0, fr0 * Math.cos(a1), pr) &&
+              proj(fr0 * Math.sin(a2), fy0, fr0 * Math.cos(a2), pr2) &&
+              proj(fr1 * Math.sin(a2), fy1, fr1 * Math.cos(a2), pr3) &&
+              proj(fr1 * Math.sin(a1), fy1, fr1 * Math.cos(a1), pr4))) continue;
+        ctx.beginPath();
+        ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]);
+        ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
+        // fully opaque from the inside — nothing shows through the fabric
+        ctx.fillStyle = 'rgb(' + ((cvR * lit) | 0) + ',' + ((cvG * lit) | 0) + ',' + ((cvB * lit) | 0) + ')';
+        ctx.fill();
+      }
+    }
+    // LED wash tints the far canvas surface: painted directly onto the wall, beneath the whole
+    // interior — walls take much more influence in the dark; daylight drowns it out
+    if (casts || edgeCast) {
+      ctx.save();
+      // clip to the visible back-fabric quads so no wash ever lands outside the tipi silhouette
+      ctx.beginPath();
+      for (i = 0; i < NPOLES; i++) {
+        var a1w = i / NPOLES * Math.PI * 2 + 0.12, a2w = (i + 1) / NPOLES * Math.PI * 2 + 0.12;
+        var amw = (a1w + a2w) / 2, rMw = coneR(HOLE_H * 0.5);
+        var fw = Math.sin(amw) * (C[0] - rMw * Math.sin(amw)) + nY * (C[1] - HOLE_H * 0.5) + Math.cos(amw) * (C[2] - rMw * Math.cos(amw));
+        if (fw >= 0) continue;
+        var rbw = coneR(0), rtw = coneR(HOLE_H);
+        if (proj(rbw * Math.sin(a1w), 0, rbw * Math.cos(a1w), pr) && proj(rbw * Math.sin(a2w), 0, rbw * Math.cos(a2w), pr2) &&
+            proj(rtw * Math.sin(a2w), HOLE_H, rtw * Math.cos(a2w), pr3) && proj(rtw * Math.sin(a1w), HOLE_H, rtw * Math.cos(a1w), pr4)) {
+          ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
+        }
+      }
+      ctx.clip();
+      ctx.globalCompositeOperation = 'lighter';
+      // edge light throws a low warm band up the canvas hem behind it
+      if (edgeCast) for (var eh2 = 0; eh2 < edgeCast.length; eh2++) {
+        var ew = edgeCast[eh2];
+        var ehY = ropeP.hm + 1.0, ehR = coneR(ehY);
+        var ehx = ehR * Math.sin(ew.a), ehz = ehR * Math.cos(ew.a);
+        var ehFacing = Math.sin(ew.a) * (C[0] - ehx) + nY * (C[1] - ehY) + Math.cos(ew.a) * (C[2] - ehz);
+        if (ehFacing >= 0 || !proj(ehx, ehY, ehz, pr)) continue;
+        var ehpx = ropeP.rstep * ropeP.rm * 0.7 * pr[2];
+        if (ehpx < 2) continue;
+        var ehal = (0.03 + 0.06 * (1 - dayF)) * ew.amp * edgeHF;
+        ctx.translate(pr[0], pr[1]); ctx.scale(1.15, 0.7);
+        var ehg = ctx.createRadialGradient(0, 0, 0, 0, 0, ehpx);
+        ehg.addColorStop(0, 'rgba(' + ew.r + ',' + ew.g + ',' + ew.b + ',' + ehal.toFixed(3) + ')');
+        ehg.addColorStop(0.55, 'rgba(' + ew.r + ',' + ew.g + ',' + ew.b + ',' + (ehal * 0.5).toFixed(3) + ')');
+        ehg.addColorStop(1, 'rgba(' + ew.r + ',' + ew.g + ',' + ew.b + ',0)');
+        ctx.fillStyle = ehg;
+        ctx.fillRect(-ehpx, -ehpx, ehpx * 2, ehpx * 2);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      if (casts) for (var wi2 = 0; wi2 < casts.length; wi2++) {
+        var wc = casts[wi2];
+        var wAng = Math.atan2(wc.st.anchor[0], wc.st.anchor[2]);
+        var wMidY = Math.max(1, wc.st.anchor[1] - wc.st.L * 0.5);
+        var wRr = coneR(wMidY);
+        var wwx = wRr * Math.sin(wAng), wwz = wRr * Math.cos(wAng);
+        var wFacing = Math.sin(wAng) * (C[0] - wwx) + nY * (C[1] - wMidY) + Math.cos(wAng) * (C[2] - wwz);
+        if (wFacing >= 0 || !proj(wwx, wMidY, wwz, pr)) continue;
+        // broad, flat, vertically-stretched wash: a subtle tint ON the fabric
+        var wpx2 = (2.5 + wc.st.L * 0.18) * pr[2];
+        var wal = (0.025 + 0.05 * (1 - dayF)) * wc.amp;
+        ctx.translate(pr[0], pr[1]); ctx.scale(0.8, 1.35);
+        var wg = ctx.createRadialGradient(0, 0, 0, 0, 0, wpx2);
+        wg.addColorStop(0, 'rgba(' + wc.r + ',' + wc.g + ',' + wc.b + ',' + wal.toFixed(3) + ')');
+        wg.addColorStop(0.55, 'rgba(' + wc.r + ',' + wc.g + ',' + wc.b + ',' + (wal * 0.5).toFixed(3) + ')');
+        wg.addColorStop(1, 'rgba(' + wc.r + ',' + wc.g + ',' + wc.b + ',0)');
+        ctx.fillStyle = wg;
+        ctx.fillRect(-wpx2, -wpx2, wpx2 * 2, wpx2 * 2);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      ctx.restore();
+    }
+
+    // far-side door (on the back wall, behind the interior — the near-side door draws in the
+    // ghost/solid late passes on top). Always open: through it you see the outside.
+    var dcx = coneR(2) * Math.sin(DOOR_A), dcz = coneR(2) * Math.cos(DOOR_A);
+    var dFacing = Math.sin(DOOR_A) * (C[0] - dcx) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - dcz);
+    if (dFacing < 0) {
+      var dpts = doorPts24();
+      if (dpts.length > 8) {
+        ctx.beginPath();
+        ctx.moveTo(dpts[0][0], dpts[0][1]);
+        for (i = 1; i < dpts.length; i++) ctx.lineTo(dpts[i][0], dpts[i][1]);
+        ctx.closePath();
+        ctx.fillStyle = 'rgb(' + lerpC(8, 96) + ',' + lerpC(10, 132) + ',' + lerpC(9, 118) + ')'; ctx.fill();
+        ctx.strokeStyle = 'rgba(150,160,150,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    }
+
+    // interior poles hug the canvas, so every back-facing pole is behind ALL room content —
+    // draw them all right here, straight after the wall, instead of depth-sorting them
+    // (front-side poles still go through the sorted pass).
+    for (i = 0; i < NPOLES; i++) {
+      var pbk = poles[i];
+      var pbkF = Math.sin(pbk.a) * (C[0] - pbk.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pbk.a) * (C[2] - pbk.b[2]);
+      if (pbkF < 0) drawPole(i);
+    }
+
+    // ---- depth-sorted solids: poles, mats, vines, people, banana (painter's, far -> near) ----
+    // so a person behind a pole/vine is occluded by it, and one in front draws over it.
+    ctx.font = '10px system-ui, sans-serif';
+    // rope light + LED strings render as depth-sorted objects (a far-side rope bay or string
+    // must NOT print over a person standing in front of it); ropeP itself is hoisted above so
+    // the edge light's cast can paint the floor edge and hem before the interior draws
+    function drawRopeBay(bay) {
+      ctx.globalCompositeOperation = 'lighter';
+      var a0 = bay * ropeP.rstep + 0.12;
+      var edgeSt = { hue: 168, phase: bay * 0.7 };   // pseudo-string context for the pattern fns
+      for (var rk = 0; rk < ropeP.dots; rk++) {
+        var rt = (rk + 0.5) / ropeP.dots;
+        var ra = a0 + rt * ropeP.rstep;
+        var ry = Math.max(0.08, ropeP.hm - ropeP.drp * Math.sin(Math.PI * rt));
+        var ewx = ropeP.rm * Math.sin(ra), ewz = ropeP.rm * Math.cos(ra);
+        if (proj(ewx, ry, ewz, pr)) {
+          var di = bay * ropeP.dots + rk;
+          var rs = edgeMode === 'led' ? Math.max(0.6, pr[2] * 0.0099)   // 6mm pebble (rs = half-width)
+                                      : Math.max(1.5, pr[2] * 0.021);  // ~1/2 in rope light
+          if (edgeMode === 'led') {
+            // pebble LED string around the edge, driven by the active pattern
+            patFn((bay + rt) / NPOLES, di, 900 + bay, edgeSt, ewx, ry, ewz, patT, rgbv);
+            ctx.fillStyle = 'rgb(' + ((rgbv[0] * 255 * briF) | 0) + ',' + ((rgbv[1] * 255 * briF) | 0) + ',' + ((rgbv[2] * 255 * briF) | 0) + ')';
+          } else {
+            var tw = 0.65 + 0.25 * Math.sin(time * 1.3 + di * 1.7);
+            ctx.fillStyle = 'rgba(228,170,100,' + (0.85 * ropeP.aScale * tw * depthAlpha(pr[2])).toFixed(3) + ')';
+          }
+          ctx.fillRect(pr[0] - rs, pr[1] - rs, rs * 2, rs * 2);
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    h2rgb(dripHue, dripSat, 1, rgbv);
+    var dripCol = 'rgba(' + ((rgbv[0] * 255) | 0) + ',' + ((rgbv[1] * 255) | 0) + ',' + ((rgbv[2] * 255) | 0) + ',' + Math.min(1, 0.9 * briF).toFixed(3) + ')';
+    function drawLedString(si) {
+      ctx.globalCompositeOperation = 'lighter';
+      var st = strings[si];
+      var dripY = -1;
+      if (st.drip >= 0) dripY = st.anchor[1] - st.drip;
+      var tInv = st.n > 1 ? 1 / (st.n - 1) : 0;
+      for (var k = 0; k < st.n; k++) {
+        var wx = st.pts[k * 3], wy = st.pts[k * 3 + 1], wz = st.pts[k * 3 + 2];
+        if (!proj(wx, wy, wz, pr)) continue;
+        var sz = Math.max(1.2, pr[2] * 0.0197);   // 6mm pebble pixel, true to scale (floor keeps far ones visible)
+        if (dripY >= 0 && Math.abs(wy - dripY) < 0.45) {
+          ctx.fillStyle = dripCol;
+          sz *= 1.5;
+        } else {
+          patFn(k * tInv, k, si, st, wx, wy, wz, patT, rgbv);
+          ctx.fillStyle = 'rgb(' + ((rgbv[0] * 255 * briF) | 0) + ',' + ((rgbv[1] * 255 * briF) | 0) + ',' + ((rgbv[2] * 255 * briF) | 0) + ')';
+        }
+        ctx.fillRect(pr[0] - sz / 2, pr[1] - sz / 2, sz, sz);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    var solids = [];
+    function cdepth(x, y, z) { return (x - C[0]) * bF[0] + (y - C[1]) * bF[1] + (z - C[2]) * bF[2]; }
+    var nYs = (R - HOLE_R) / H;
+    for (i = 0; i < NPOLES; i++) {
+      var pb = poles[i];
+      var pFace = Math.sin(pb.a) * (C[0] - pb.b[0]) + nYs * (C[1] - H * 0.5) + Math.cos(pb.a) * (C[2] - pb.b[2]);
+      if (pFace < 0) continue;                 // back poles already drawn right after the canvas
+      if (P.hideFront) continue;
+      solids.push([cdepth((pb.b[0] + pb.t[0]) / 2, (pb.b[1] + pb.t[1]) / 2, (pb.b[2] + pb.t[2]) / 2), 0, i]);
+    }
+    for (i = 0; i < mats.length; i++) {
+      var mp = mats[i].poly, mcx = (mp[0][0] + mp[1][0] + mp[2][0] + mp[3][0]) / 4, mcz = (mp[0][1] + mp[1][1] + mp[2][1] + mp[3][1]) / 4;
+      solids.push([cdepth(mcx, MATS.T * 0.5, mcz), 1, i]);
+    }
+    for (i = 0; i < vines.length; i++) {
+      var vk = vines[i].kind;
+      if (vk === 'd' && !P.vinesDraped) continue;
+      // vertical vines / spiral / drops always shown — their counts are the controls
+      var vm = vines[i].pts[vines[i].pts.length >> 1];
+      solids.push([cdepth(vm[0], vm[1], vm[2]), 2, i]);
+    }
+    for (i = 0; i < PEOPLE.length; i++) {
+      if (!P[PEOPLE[i].id]) continue;
+      var pePe = PEOPLE[i], prPe = Math.max(0.6, Math.min(pePe.radF * R, coneR(pePe.h) - 0.4 - pePe.data.halfW * pePe.h));
+      solids.push([cdepth(prPe * Math.sin(pePe.ang), pePe.h * 0.5, prPe * Math.cos(pePe.ang)), 3, i]);
+    }
+    if (P.banana) { var bRs = Math.min(2.6, R * 0.35); solids.push([cdepth(bRs * Math.sin(2.9), 0.05, bRs * Math.cos(2.9)), 4, 0]); }
+    // fog participates in the depth sort as a volume at the room's centre column, so people,
+    // poles and vines in front of it occlude it correctly (it's a waterfall, not screen haze)
+    if (P.fog && fogP.length) solids.push([cdepth(0, HOLE_H - (P.fogLen || 6) * 0.5, 0), 5, 0]);
+    if (P.fog) solids.push([cdepth(0.55, 0.6, 0.35), 8, 0]);   // the physical spotlight fixture
+    if (ropeP) for (i = 0; i < NPOLES; i++) {
+      var rma = i * ropeP.rstep + 0.12 + ropeP.rstep / 2;
+      solids.push([cdepth(ropeP.rm * Math.sin(rma), ropeP.hm, ropeP.rm * Math.cos(rma)), 6, i]);
+    }
+    for (i = 0; i < strings.length; i++) {
+      var sro = strings[i].role || 'radial';
+      if (sro === 'spiral' ? !P.spiralLeds : !P.ledStrings) continue;   // verticals + drops share one toggle
+      var smid = (strings[i].n >> 1) * 3;
+      solids.push([cdepth(strings[i].pts[smid], strings[i].pts[smid + 1], strings[i].pts[smid + 2]), 7, i]);
+    }
+    solids.sort(function (a, b) { return b[0] - a[0]; });   // farthest first
+    for (var so = 0; so < solids.length; so++) {
+      var kind = solids[so][1], idx = solids[so][2];
+      if (kind === 0) drawPole(idx);
+      else if (kind === 1) drawMat(idx);
+      else if (kind === 2) drawVine(idx);
+      else if (kind === 3) drawPerson(idx);
+      else if (kind === 4) drawBanana();
+      else if (kind === 5) drawFogLayer();
+      else if (kind === 6) drawRopeBay(idx);
+      else if (kind === 7) drawLedString(idx);
+      else drawSpotlight();
+    }
+
+    // fog emitter: a short ~8in can hung at the smoke hole; fog spills from its base
+    if (P.fog) {
+      var er = Math.max(0.05, (P.fogSize || 8) / 24), eTopY = HOLE_H, eBotY = HOLE_H - FOG_TOP;
+      var eN = 22, eTop = [], eBot = [], eok = true;
+      for (var ee = 0; ee <= eN; ee++) {
+        var ea = ee / eN * Math.PI * 2, esx = er * Math.sin(ea), esz = er * Math.cos(ea);
+        if (proj(esx, eTopY, esz, pr) && proj(esx, eBotY, esz, pr2)) { eTop.push([pr[0], pr[1]]); eBot.push([pr2[0], pr2[1]]); }
+        else { eok = false; break; }
+      }
+      if (eok) {
+        for (var ee = 0; ee < eN; ee++) {   // wall quads (overdraw both faces, opaque dark)
+          ctx.beginPath();
+          ctx.moveTo(eTop[ee][0], eTop[ee][1]); ctx.lineTo(eTop[ee + 1][0], eTop[ee + 1][1]);
+          ctx.lineTo(eBot[ee + 1][0], eBot[ee + 1][1]); ctx.lineTo(eBot[ee][0], eBot[ee][1]);
+          ctx.closePath(); ctx.fillStyle = '#191d1b'; ctx.fill();
+        }
+        ctx.beginPath(); ctx.moveTo(eBot[0][0], eBot[0][1]);   // base disc (fog exit)
+        for (var ee = 1; ee <= eN; ee++) ctx.lineTo(eBot[ee][0], eBot[ee][1]);
+        ctx.closePath(); ctx.fillStyle = '#0b0e0d'; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(eTop[0][0], eTop[0][1]);   // top rim highlight
+        for (var ee = 1; ee <= eN; ee++) ctx.lineTo(eTop[ee][0], eTop[ee][1]);
+        ctx.closePath(); ctx.strokeStyle = 'rgba(150,162,156,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
+
+    // (rope light, LED strings, light cast and fog all render inside the depth-sorted pass)
+
+    // solid front wall: drawn LAST (nearest to camera) so it correctly hides the interior.
+    // The door is always open — it's clipped OUT of the wall, so the interior shows through.
+    if (P.wallSolid) {
+      ctx.save();
+      var dcx2 = coneR(2) * Math.sin(DOOR_A), dcz2 = coneR(2) * Math.cos(DOOR_A);
+      var doorPts = null;
+      if (Math.sin(DOOR_A) * (C[0] - dcx2) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - dcz2) >= 0) {
+        doorPts = doorPts24();
+        if (doorPts.length > 8) {
+          ctx.beginPath();
+          ctx.rect(0, 0, Wpx, Hpx);
+          ctx.moveTo(doorPts[0][0], doorPts[0][1]);
+          for (i = 1; i < doorPts.length; i++) ctx.lineTo(doorPts[i][0], doorPts[i][1]);
+          ctx.closePath();
+          ctx.clip('evenodd');   // paint the wall everywhere EXCEPT the open door
+        } else doorPts = null;
+      }
+      for (i = 0; i < NPOLES; i++) {
+        var a1s = i / NPOLES * Math.PI * 2 + 0.12, a2s = (i + 1) / NPOLES * Math.PI * 2 + 0.12;
+        var ams = (a1s + a2s) / 2, cyMs = HOLE_H * 0.5, rMs = coneR(cyMs);
+        var facing2 = Math.sin(ams) * (C[0] - rMs * Math.sin(ams)) + nY * (C[1] - cyMs) + Math.cos(ams) * (C[2] - rMs * Math.cos(ams));
+        if (facing2 < 0) continue;   // back facets already drawn in the main pass
+        var lit2 = 0.86 + 0.08 * Math.sin(ams * 3);
+        for (var seg2 = 0; seg2 < 5; seg2++) {
+          var gy0 = HOLE_H * seg2 / 5 - (seg2 ? 0.06 : 0), gy1 = HOLE_H * (seg2 + 1) / 5;
+          var gr0 = coneR(Math.max(0, gy0)), gr1 = coneR(gy1);
+          if (!(proj(gr0 * Math.sin(a1s), gy0, gr0 * Math.cos(a1s), pr) &&
+                proj(gr0 * Math.sin(a2s), gy0, gr0 * Math.cos(a2s), pr2) &&
+                proj(gr1 * Math.sin(a2s), gy1, gr1 * Math.cos(a2s), pr3) &&
+                proj(gr1 * Math.sin(a1s), gy1, gr1 * Math.cos(a1s), pr4))) continue;
+          ctx.beginPath();
+          ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]);
+          ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
+          ctx.fillStyle = 'rgb(' + ((cvR * lit2) | 0) + ',' + ((cvG * lit2) | 0) + ',' + ((cvB * lit2) | 0) + ')';
+          ctx.fill();
+        }
+      }
+      ctx.restore();   // lift the door clip
+      // door rim on the solid wall (the opening itself stays see-through)
+      if (doorPts) {
+        ctx.beginPath();
+        ctx.moveTo(doorPts[0][0], doorPts[0][1]);
+        for (i = 1; i < doorPts.length; i++) ctx.lineTo(doorPts[i][0], doorPts[i][1]);
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(150,160,150,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    } else if (!P.hideFront) {
+      // ghost front: the translucent near wall is drawn LAST so it reads as a veil over the
+      // interior — bay seams + the entrance outline always stay visible
+      for (i = 0; i < NPOLES; i++) {
+        var agh = i / NPOLES * Math.PI * 2 + 0.12;
+        var amA = agh + Math.PI / NPOLES, amB = agh - Math.PI / NPOLES;
+        var rMg = coneR(HOLE_H * 0.5), cyg = HOLE_H * 0.5;
+        var fA = Math.sin(amA) * (C[0] - rMg * Math.sin(amA)) + nY * (C[1] - cyg) + Math.cos(amA) * (C[2] - rMg * Math.cos(amA));
+        var fB = Math.sin(amB) * (C[0] - rMg * Math.sin(amB)) + nY * (C[1] - cyg) + Math.cos(amB) * (C[2] - rMg * Math.cos(amB));
+        if (fA < 0 && fB < 0) continue;   // seam between two back-side bays
+        ctx.beginPath(); var gF = true;
+        for (var gs = 0; gs <= 5; gs++) {
+          var gy = HOLE_H * gs / 5, gr2 = coneR(gy);
+          if (proj(gr2 * Math.sin(agh), gy, gr2 * Math.cos(agh), pr)) {
+            if (gF) { ctx.moveTo(pr[0], pr[1]); gF = false; } else ctx.lineTo(pr[0], pr[1]);
+          }
+        }
+        ctx.strokeStyle = 'rgba(120,135,125,0.14)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      // entrance: outline only — the opening itself stays completely uncovered
+      var dcx4 = coneR(2) * Math.sin(DOOR_A), dcz4 = coneR(2) * Math.cos(DOOR_A);
+      if (Math.sin(DOOR_A) * (C[0] - dcx4) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - dcz4) >= 0) {
+        var gdp = doorPts24();
+        if (gdp.length > 8) {
+          ctx.beginPath();
+          ctx.moveTo(gdp[0][0], gdp[0][1]);
+          for (i = 1; i < gdp.length; i++) ctx.lineTo(gdp[i][0], gdp[i][1]);
+          ctx.closePath();
+          ctx.strokeStyle = 'rgba(160,172,164,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+      }
+    }
+
+    // measurement guides on top while a slider is being adjusted
+    if (guideId) {
+      var gAge = performance.now() - guideT;
+      if (gAge < GUIDE_HOLD + GUIDE_FADE) drawGuides(Math.min(1, 1 - (gAge - GUIDE_HOLD) / GUIDE_FADE));
+    }
+
+    // (people and banana are drawn above, within the depth-sorted solids pass)
+  }
+
+  // the physical fog spotlight: ~6 in wide, 14 in tall, on the floor near the centre, leaning
+  // toward the falling fog. Its lens glows with the spotlight colour from the Fog card.
+  function drawSpotlight() {
+    var bx = 0.55, bz = 0.35;
+    var x1 = bx - 0.24, z1 = bz - 0.16, y1 = 1.17;
+    if (!proj(bx, 0.05, bz, pr) || !proj(x1, y1, z1, pr2)) return;
+    // U-mount yoke, built in 3D: a pivot bolt on each SIDE of the can at mid-height, and a
+    // leg that stays on its OWN side — bolt straight down to a slightly splayed ground foot.
+    // Legs never cross the body silhouette; the far leg draws first so the can occludes it.
+    var sdx = z1 - bz, sdz = -(x1 - bx);                       // horizontal side dir, perp to the lean
+    var sdl = Math.hypot(sdx, sdz) || 1; sdx /= sdl; sdz /= sdl;
+    var mx = bx + (x1 - bx) * 0.52, my = 0.05 + (y1 - 0.05) * 0.52, mz = bz + (z1 - bz) * 0.52;
+    var rr = 0.3;                                              // bolt offset ~ can radius
+    var uw = Math.max(1.2, pr2[2] * 0.05);
+    function yokeLeg(side) {
+      var px2 = mx + sdx * rr * side, pz2 = mz + sdz * rr * side;             // pivot bolt
+      // feet plant PAST the lens side, so going down the leg rakes opposite the can's slant
+      // (can runs lens-side-up -> base-side-down; legs run base-side-up -> lens-side-down)
+      var fx2 = x1 + (x1 - bx) * 0.55 + sdx * rr * 1.35 * side;
+      var fz2 = z1 + (z1 - bz) * 0.55 + sdz * rr * 1.35 * side;
+      if (!proj(px2, my, pz2, pr3) || !proj(fx2, 0.02, fz2, pr4)) return;
+      ctx.strokeStyle = '#454d52'; ctx.lineWidth = uw; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.stroke();
+      ctx.fillStyle = '#3a4145';                               // foot pad
+      ctx.beginPath(); ctx.ellipse(pr4[0], pr4[1], Math.max(1.5, pr4[2] * 0.09), Math.max(1, pr4[2] * 0.04), 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5a6368';                               // pivot bolt head
+      ctx.beginPath(); ctx.arc(pr3[0], pr3[1], Math.max(1.5, pr3[2] * 0.05), 0, Math.PI * 2); ctx.fill();
+    }
+    var sA = proj(mx + sdx * rr, my, mz + sdz * rr, pr3) ? pr3[2] : 0;
+    var sB = proj(mx - sdx * rr, my, mz - sdz * rr, pr3) ? pr3[2] : 0;
+    var farSide = sA < sB ? 1 : -1;                            // smaller projected scale = farther
+    yokeLeg(farSide);
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = '#23282b';
+    ctx.lineWidth = Math.max(2.5, pr[2] * 0.5);
+    ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
+    yokeLeg(-farSide);
+    // lens + glow in the spotlight colour (dark lens, no glow, when the spotlight is off)
+    var lrx = Math.max(1.5, pr2[2] * 0.22);
+    if (P.spotOn === false) {
+      ctx.fillStyle = '#2b3033';
+      ctx.beginPath(); ctx.ellipse(pr2[0], pr2[1], lrx, lrx * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    var fc = P.fogColor || '#cfeef2';
+    var fcr = parseInt(fc.substr(1, 2), 16), fcg = parseInt(fc.substr(3, 2), 16), fcb = parseInt(fc.substr(5, 2), 16);
+    ctx.fillStyle = fc;
+    ctx.beginPath(); ctx.ellipse(pr2[0], pr2[1], lrx, lrx * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    // shielded fixture: just a whisper of halo at the lens, no spillover
+    ctx.globalCompositeOperation = 'lighter';
+    var briG = Math.max(0.1, (P.fogBri == null ? 80 : P.fogBri) / 100);
+    var sg = ctx.createRadialGradient(pr2[0], pr2[1], 0, pr2[0], pr2[1], lrx * 1.7);
+    sg.addColorStop(0, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',' + (0.16 * briG).toFixed(3) + ')');
+    sg.addColorStop(1, 'rgba(' + fcr + ',' + fcg + ',' + fcb + ',0)');
+    ctx.fillStyle = sg;
+    ctx.fillRect(pr2[0] - lrx * 1.7, pr2[1] - lrx * 1.7, lrx * 3.4, lrx * 3.4);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // fog waterfall, drawn at its depth inside the solids pass: people/poles/vines nearer the
+  // camera occlude it, and the tightened blur keeps it a defined column instead of screen haze
+  function drawFogLayer() {
+    if (fogBuf.width !== Wpx || fogBuf.height !== Hpx) { fogBuf.width = Wpx; fogBuf.height = Hpx; fogBufCtx = fogBuf.getContext('2d'); }
+    var fbx = fogBufCtx;
+    fbx.globalCompositeOperation = 'source-over'; fbx.globalAlpha = 1;
+    fbx.clearRect(0, 0, Wpx, Hpx);
+    fbx.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < fogP.length; i++) {
+      var fp = fogP[i];
+      if (!proj(fp.x, fp.y, fp.z, pr)) continue;
+      fbx.globalAlpha = 0.26 * Math.pow(fp.life, 0.6) * depthAlpha(pr[2]);
+      var spx = fp.sz * pr[2] * 0.11;   // tight puffs -> a defined waterfall, not ambient glow
+      fbx.drawImage(fogSprite, pr[0] - spx, pr[1] - spx, spx * 2, spx * 2);
+    }
+    fbx.globalAlpha = 1;
+    fbx.globalCompositeOperation = 'source-in';    // tint the accumulated haze
+    fbx.fillStyle = P.fogColor || '#cfeef2';
+    fbx.fillRect(0, 0, Wpx, Hpx);
+    fbx.globalCompositeOperation = 'source-over';
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.filter = 'blur(4px)';
+    // overdrive: brightness stacks the haze past 1x so a strong spotlight reads white-hot
+    // spotlight off -> the fog is unlit and barely reads (just ambient)
+    var fbri = P.spotOn === false ? 6 : (P.fogBri == null ? 80 : P.fogBri);
+    var fogPass = Math.max(0, fbri / 100) * 2.9;
+    while (fogPass > 0.001) { ctx.globalAlpha = Math.min(1, fogPass); ctx.drawImage(fogBuf, 0, 0, Wpx, Hpx); fogPass -= 1; }
+    ctx.filter = 'none';
+    ctx.restore();
+  }
+
+  // ---- animation loop ----
+  var needsDraw = true, lastT = 0, simT = 0;
+  function frame(t) {
+    requestAnimationFrame(frame);
+    // keep redrawing while a measurement guide is up. While the pointer is still down on the
+    // slider the guide stays at full strength; the fade only starts on release.
+    if (guideId) {
+      if (guideHeld) guideT = performance.now();
+      if (performance.now() - guideT < GUIDE_HOLD + GUIDE_FADE) needsDraw = true;
+      else guideId = null;
+    }
+    if (innerWidth !== Wpx || innerHeight !== Hpx) resize(); // covers zero-size-at-load embeds too
+    var dt = Math.min((t - lastT) / 1000 || 0.016, 0.1);
+    lastT = t;
+    if (walkMode) {
+      var mf = (walkKeys.f ? 1 : 0) - (walkKeys.b ? 1 : 0);
+      var ms = (walkKeys.r ? 1 : 0) - (walkKeys.l ? 1 : 0);
+      if (mf || ms) {
+        var ml = Math.hypot(mf, ms);
+        walkMove(mf / ml * 4.5 * dt, ms / ml * 4.5 * dt);   // ~4.5 ft/s, an easy stroll
+        needsDraw = true;
+      }
+    }
+    var animate = !reduced;   // always animate (reduced-motion preference still respected)
+    if (animate) {
+      simT += dt;
+      if (P.fog) stepFog(dt);
+      if (P.drips) {
+        var dmul = patMulFromSpeed(P.dripSpeed);
+        for (var i = 0; i < strings.length; i++) {
+          var st = strings[i];
+          if (st.drip >= 0) {
+            st.drip += dt * 7 * dmul;
+            if (st.drip > st.L + 0.5) { st.drip = -1; st.nextDrip = 2 + Math.random() * 9; }
+          } else {
+            st.nextDrip -= dt;
+            if (st.nextDrip <= 0) st.drip = 0;
+          }
+        }
+      }
+      needsDraw = true;
+    } else if (P.fog && fogP.length === 0) {
+      for (var w = 0; w < 140; w++) stepFog(0.09); // pre-roll so static view still shows fog
+      needsDraw = true;
+    }
+    if (needsDraw) { drawScene(simT); if (walkMode) drawWalkHint(); needsDraw = false; }
+  }
+
+  // ---- input ----
+  var pointers = new Map(), lastPinch = 0;
+  cv.addEventListener('pointerdown', function (e) {
+    cv.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, [e.clientX, e.clientY]);
+    cv.classList.add('dragging');
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!pointers.has(e.pointerId)) return;
+    var prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pointers.size === 1) {
+      if (walkMode) {                                // grab-the-world look: the scene follows the finger
+        walk.yaw += (e.clientX - prev[0]) * 0.0035;
+        walk.pitch = Math.max(-1.45, Math.min(1.45, walk.pitch + (e.clientY - prev[1]) * 0.0035));
+      } else {
+        cam.az -= (e.clientX - prev[0]) * 0.006;
+        cam.el = Math.max(-1.52, Math.min(1.52, cam.el + (e.clientY - prev[1]) * 0.005));
+      }
+      needsDraw = true;
+    } else if (pointers.size === 2) {
+      var pts = Array.from(pointers.values());
+      var d = Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]);
+      if (lastPinch) {
+        cam.dist = Math.max(4, Math.min(75, cam.dist * lastPinch / d));
+        needsDraw = true;
+      }
+      lastPinch = d;
+    }
+  });
+  function endPtr(e) { pointers.delete(e.pointerId); lastPinch = 0; if (!pointers.size) cv.classList.remove('dragging'); }
+  cv.addEventListener('pointerup', endPtr);
+  cv.addEventListener('pointercancel', endPtr);
+  cv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    if (walkMode) walkMove(-Math.sign(e.deltaY) * 0.8, 0);   // scroll = step forward/back
+    else cam.dist = Math.max(4, Math.min(75, cam.dist * (1 + Math.sign(e.deltaY) * 0.08)));
+    needsDraw = true;
+  }, { passive: false });
+
+  // ---- walk-mode keys (movement applied per-frame in frame() for smooth motion) ----
+  var walkKeys = {};
+  var WALK_KEYMAP = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b',
+                      KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
+  var vWalkBtn = document.getElementById('vWalk');
+  function enterWalk() {
+    walkMode = true;
+    var r0 = walkLim() * 0.85;                       // spawn just inside the door, facing the room
+    walk.x = r0 * Math.sin(DOOR_A); walk.z = r0 * Math.cos(DOOR_A);
+    walk.yaw = DOOR_A + Math.PI; walk.pitch = 0.1;
+    walkT = performance.now();
+    vWalkBtn.classList.add('on');
+    needsDraw = true;
+  }
+  function exitWalk() { walkMode = false; walkKeys = {}; vWalkBtn.classList.remove('on'); needsDraw = true; }
+  vWalkBtn.addEventListener('click', enterWalk);
+  addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { if (walkMode && confirmOv.hidden) exitWalk(); return; }
+    if (!walkMode || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    var k = WALK_KEYMAP[e.code];
+    if (k) { walkKeys[k] = true; e.preventDefault(); }
+  });
+  addEventListener('keyup', function (e) { var k = WALK_KEYMAP[e.code]; if (k) walkKeys[k] = false; });
+  addEventListener('blur', function () { walkKeys = {}; });  // don't keep gliding after alt-tab
+  function drawWalkHint() {
+    var a = Math.min(1, Math.max(0, 1 - (performance.now() - walkT - 4500) / 1200));
+    if (a <= 0) return;
+    var msg = 'W A S D — walk · drag — look · Esc — exit';
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.font = '12px system-ui, "Segoe UI", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var y = Hpx - 78, w = ctx.measureText(msg).width + 30;
+    ctx.fillStyle = 'rgba(6, 14, 16, 0.6)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(viewCX - w / 2, y - 13, w, 26, 13);
+    else ctx.rect(viewCX - w / 2, y - 13, w, 26);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(79, 216, 196, 0.95)';
+    ctx.fillText(msg, viewCX, y);
+    ctx.restore();
+  }
+
+  sliders.concat(toggles).forEach(function (id) {
+    var ctl = document.getElementById(id);
+    ctl.addEventListener('input', function () {
+      if (GUIDE_IDS[id]) { guideId = id; guideT = performance.now(); }
+      regen();
+    });
+    if (GUIDE_IDS[id]) {
+      // grabbing the slider shows its guide and pins it until the pointer is released
+      ctl.addEventListener('pointerdown', function () {
+        guideId = id; guideHeld = true; guideT = performance.now(); needsDraw = true;
+      });
+    }
+  });
+  addEventListener('pointerup', function () { if (guideHeld) { guideHeld = false; guideT = performance.now(); } });
+  addEventListener('pointercancel', function () { if (guideHeld) { guideHeld = false; guideT = performance.now(); } });
+  document.getElementById('fogColor').addEventListener('input', regen);
+  // tipi dimensions: hidden range input holds the canonical (clamped, stepped) value; the
+  // visible UI is the stepper arrows + editable number box, kept in lockstep with it
+  ['tipiH', 'tipiD', 'tipiP'].forEach(function (sid) {
+    var sl = document.getElementById(sid), nb = document.getElementById(sid + 'Num');
+    Array.prototype.forEach.call(document.querySelectorAll('.step-btn[data-stepfor=' + sid + ']'), function (btn) {
+      btn.addEventListener('click', function () {
+        if (+btn.getAttribute('data-dir') > 0) sl.stepUp(); else sl.stepDown();
+        nb.value = sl.value;
+        sl.dispatchEvent(new Event('input', { bubbles: true }));   // reuse the regular slider path
+      });
+    });
+    nb.addEventListener('input', function () {
+      var v = parseFloat(nb.value);
+      if (!isNaN(v) && v >= +sl.min && v <= +sl.max) { sl.value = v; regen(); }
+    });
+    nb.addEventListener('change', function () {      // blur / Enter: clamp + normalize
+      var v = parseFloat(nb.value);
+      if (isNaN(v)) v = +sl.value;
+      v = Math.max(+sl.min, Math.min(+sl.max, v));
+      sl.value = v; nb.value = sl.value;             // slider snaps to its step; mirror that
+      regen();
+    });
+  });
+  document.getElementById('shuffle').addEventListener('click', function () {
+    // vines/strings only — mats re-shuffle by tapping the active coverage icon
+    seed = (seed * 16807 + 13) % 2147483647;
+    regen();
+  });
+  // mats: segmented coverage selector. Tap a different icon to switch; tap the active icon to
+  // re-shuffle that pattern within its guides (independent matSeed).
+  var MAT_ORDER = ['full', 'medium', 'sparse'], MAT_LABEL = { sparse: 'Sparse', medium: 'Medium', full: 'Full' };
+  var matSegHl = document.getElementById('matSegHl'), matCap = document.getElementById('matCap');
+  var matBtns = Array.prototype.slice.call(document.querySelectorAll('#matSeg .seg-btn'));
+  function updateMatSeg() {
+    var idx = MAT_ORDER.indexOf(matPattern); if (idx < 0) idx = 1;
+    matSegHl.style.transform = 'translateX(' + (idx * 100) + '%)';
+    matBtns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-mat') === matPattern); });
+    matCap.innerHTML = MAT_LABEL[matPattern] + ' &middot; tap the active icon to re-shuffle';
+  }
+  matBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var m = b.getAttribute('data-mat');
+      if (m === matPattern) matSeed = (matSeed * 16807 + 7) % 2147483647;   // re-shuffle within this pattern
+      else matPattern = m;
+      updateMatSeg(); regen();
+    });
+  });
+  updateMatSeg();
+
+  // layout selector: Radial <-> Spiral (rewires the whole LED + vine generation)
+  var layoutSegHl = document.getElementById('layoutSegHl');
+  var layoutBtns = Array.prototype.slice.call(document.querySelectorAll('#layoutSeg .seg-btn'));
+  var LAYOUT_ORDER = ['radial', 'spiral'];
+  function updateLayoutSeg() {
+    var idx = LAYOUT_ORDER.indexOf(layout); if (idx < 0) idx = 0;
+    layoutSegHl.style.transform = 'translateX(' + (idx * 100) + '%)';
+    layoutBtns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-layout') === layout); });
+    document.body.classList.toggle('layout-spiral', layout === 'spiral');
+  }
+  layoutBtns.forEach(function (b) {
+    b.addEventListener('click', function () { layout = b.getAttribute('data-layout'); updateLayoutSeg(); regen(); });
+  });
+  updateLayoutSeg();
+
+  // front-wall selector: Solid / Ghost / Open
+  var wallSegHl = document.getElementById('wallSegHl');
+  var wallBtns = Array.prototype.slice.call(document.querySelectorAll('#wallSeg .seg-btn'));
+  var WALL_ORDER = ['solid', 'ghost', 'open'];
+  function updateWallSeg() {
+    var idx = WALL_ORDER.indexOf(wallMode); if (idx < 0) idx = 1;
+    wallSegHl.style.transform = 'translateX(' + (idx * 100) + '%)';
+    wallBtns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-wall') === wallMode); });
+  }
+  wallBtns.forEach(function (b) {
+    b.addEventListener('click', function () { wallMode = b.getAttribute('data-wall'); updateWallSeg(); regen(); });
+  });
+  updateWallSeg();
+
+  // edge light selector: warm rope light / pattern-driven LED string / off
+  var edgeSegHl = document.getElementById('edgeSegHl');
+  var edgeBtns = Array.prototype.slice.call(document.querySelectorAll('#edgeSeg .seg-btn'));
+  var EDGE_ORDER = ['rope', 'led', 'off'];
+  function updateEdgeSeg() {
+    var idx = EDGE_ORDER.indexOf(edgeMode); if (idx < 0) idx = 0;
+    edgeSegHl.style.transform = 'translateX(' + (idx * 100) + '%)';
+    edgeBtns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-edge') === edgeMode); });
+  }
+  edgeBtns.forEach(function (b) {
+    b.addEventListener('click', function () { edgeMode = b.getAttribute('data-edge'); updateEdgeSeg(); regen(); });
+  });
+  updateEdgeSeg();
+
+  // LED pattern buttons — the active one highlights and plays
+  var patGrid = document.getElementById('patGrid');
+  PAT_LIST.forEach(function (p) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'pat'; b.textContent = p[1]; b.setAttribute('data-pat', p[0]);
+    b.addEventListener('click', function () { pattern = p[0]; updatePatUI(); needsDraw = true; });
+    patGrid.appendChild(b);
+  });
+  function updatePatUI() {
+    Array.prototype.forEach.call(patGrid.children, function (b) {
+      b.classList.toggle('on', b.getAttribute('data-pat') === pattern);
+    });
+  }
+  updatePatUI();
+
+  // drip colour: circular hue/saturation wheel (hue by angle, saturation by radius, full value)
+  var dripWheel = document.getElementById('dripWheel');
+  var dwCtx = dripWheel.getContext('2d');
+  var dwTmp = [0, 0, 0];
+  function drawDripWheel() {
+    var Wd = dripWheel.width, Rw = Wd / 2;
+    var img = dwCtx.createImageData(Wd, Wd);
+    for (var yy = 0; yy < Wd; yy++) {
+      for (var xx = 0; xx < Wd; xx++) {
+        var dx = xx - Rw + 0.5, dy = yy - Rw + 0.5, dd = Math.hypot(dx, dy);
+        var o = (yy * Wd + xx) * 4;
+        if (dd > Rw - 0.5) continue;   // outside the disc stays transparent
+        h2rgb(Math.atan2(dy, dx) / 6.2832 + 0.5, Math.min(1, dd / (Rw - 1)), 1, dwTmp);
+        img.data[o] = dwTmp[0] * 255; img.data[o + 1] = dwTmp[1] * 255; img.data[o + 2] = dwTmp[2] * 255;
+        img.data[o + 3] = 255;
+      }
+    }
+    dwCtx.putImageData(img, 0, 0);
+    // selection marker
+    var mA = (dripHue - 0.5) * 6.2832, mR = dripSat * (Rw - 1);
+    var mx = Rw + Math.cos(mA) * mR, my = Rw + Math.sin(mA) * mR;
+    dwCtx.beginPath(); dwCtx.arc(mx, my, 4.5, 0, 7);
+    dwCtx.strokeStyle = 'rgba(10,16,14,0.9)'; dwCtx.lineWidth = 3; dwCtx.stroke();
+    dwCtx.beginPath(); dwCtx.arc(mx, my, 4.5, 0, 7);
+    dwCtx.strokeStyle = '#fff'; dwCtx.lineWidth = 1.4; dwCtx.stroke();
+  }
+  var dripSwatch = document.getElementById('dripSwatch');
+  var dripPop = document.getElementById('dripPop');
+  function updateDripSwatch() {
+    h2rgb(dripHue, dripSat, 1, dwTmp);
+    dripSwatch.style.background = 'rgb(' + ((dwTmp[0] * 255) | 0) + ',' + ((dwTmp[1] * 255) | 0) + ',' + ((dwTmp[2] * 255) | 0) + ')';
+  }
+  function dripPick(e) {
+    var rb = dripWheel.getBoundingClientRect();
+    var dx = (e.clientX - rb.left) * (dripWheel.width / rb.width) - dripWheel.width / 2;
+    var dy = (e.clientY - rb.top) * (dripWheel.height / rb.height) - dripWheel.height / 2;
+    dripSat = Math.min(1, Math.hypot(dx, dy) / (dripWheel.width / 2 - 1));
+    dripHue = Math.atan2(dy, dx) / 6.2832 + 0.5;
+    drawDripWheel(); updateDripSwatch(); needsDraw = true;
+  }
+  var dripDrag = false;
+  dripWheel.addEventListener('pointerdown', function (e) { dripDrag = true; dripWheel.setPointerCapture(e.pointerId); dripPick(e); });
+  dripWheel.addEventListener('pointermove', function (e) { if (dripDrag) dripPick(e); });
+  addEventListener('pointerup', function () { dripDrag = false; });
+  dripSwatch.addEventListener('click', function () {
+    dripPop.hidden = !dripPop.hidden;
+    if (!dripPop.hidden) drawDripWheel();
+  });
+  addEventListener('pointerdown', function (e) {   // click-away closes the picker
+    if (!dripPop.hidden && !dripPop.contains(e.target) && e.target !== dripSwatch) dripPop.hidden = true;
+  });
+  drawDripWheel(); updateDripSwatch();
+
+  // For-scale figure buttons: silhouettes from the same outlines as the 3D figures, lined up
+  // bottom-aligned like the old chooser; heights proportional; tap toggles. The banana button
+  // shares the tallest human's box size. Hidden checkboxes keep params/saves wiring unchanged.
+  var figRow = document.getElementById('figRow');
+  var FIG_MAXH = 44;
+  var figTallest = 0;
+  PEOPLE.forEach(function (pe) { if (pe.h > figTallest) figTallest = pe.h; });
+  function figSvg(fig) {
+    var d = FIGURES[fig];
+    var path = d.loops.map(function (loop) {
+      return 'M' + loop.map(function (p) {
+        return (p[0] + d.halfW).toFixed(3) + ' ' + (1 - p[1]).toFixed(3);
+      }).join('L') + 'Z';
+    }).join('');
+    return '<svg viewBox="0 0 ' + (d.halfW * 2).toFixed(3) + ' 1" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="' + path + '"/></svg>';
+  }
+  // upright banana, generated from an arc centerline + real thickness profile: stem at the top,
+  // constant-ish thick middle, blossom nub at the tip. Bows right; fills the button box.
+  var BANANA_SVG = '<svg viewBox="3 -1 32 57" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><path fill="currentColor" d="M5.0 3.3 L6.2 0.3 L11.6 1.6 L15.9 2.7 L19.9 4.7 L23.5 7.4 L26.6 10.7 L29.2 14.6 L31.1 18.8 L32.2 23.3 L32.6 28.0 L32.2 32.7 L31.1 37.2 L29.2 41.4 L26.6 45.3 L23.5 48.6 L19.9 51.3 L15.9 53.3 L11.6 54.4 L8.3 53.1 L9.8 49.9 L12.5 47.5 L14.8 45.1 L16.8 42.5 L18.5 39.8 L19.8 36.9 L20.7 34.0 L21.2 31.0 L21.4 28.0 L21.2 25.0 L20.7 22.0 L19.8 19.1 L18.5 16.2 L16.8 13.5 L14.8 10.9 L12.5 8.5 L9.8 6.1 Z"/></svg>';
+  function mkFigBtn(id, iconHtml, hPx, title) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'figbtn'; b.title = title;
+    b.setAttribute('aria-label', title + ' on/off');
+    b.setAttribute('data-for', id);
+    b.innerHTML = iconHtml;
+    var sv = b.querySelector('svg');
+    if (hPx) sv.style.height = hPx + 'px';                       // people: proportional heights
+    else { sv.style.width = '100%'; sv.style.height = 'auto'; }  // banana: fit the button box
+    b.addEventListener('click', function () {
+      var cb = document.getElementById(id);
+      cb.checked = !cb.checked; regen(); syncFigBtns();
+    });
+    figRow.appendChild(b);
+  }
+  PEOPLE.forEach(function (pe) {
+    mkFigBtn(pe.id, figSvg(pe.fig), Math.max(14, Math.round(pe.h / figTallest * FIG_MAXH)), pe.label);
+  });
+  mkFigBtn('banana', BANANA_SVG, FIG_MAXH, 'banana 7.5"');
+  function syncFigBtns() {
+    Array.prototype.forEach.call(figRow.querySelectorAll('.figbtn'), function (b) {
+      b.classList.toggle('on', document.getElementById(b.getAttribute('data-for')).checked);
+    });
+  }
+  syncFigBtns();
+
+  // ---- saves: bottom-right preset bank ----
+  // "Save" arms slot-write: the next slot click stores the full current look. A bare slot click
+  // loads that save after a confirm (current unsaved tweaks are lost). Persisted in localStorage.
+  var SAVE_KEY = 'cenotipi-saves-v1';
+  var saves = [];
+  try { saves = JSON.parse(localStorage.getItem(SAVE_KEY) || '[]') || []; } catch (e) { saves = []; }
+  var saveArmed = false, dlArmed = false;
+  var saveArmBtn = document.getElementById('saveArm');
+  var dlArmBtn = document.getElementById('dlArm');
+  var saveCap = document.getElementById('saveCap');
+  var slotWrap = document.getElementById('saveSlots');
+  var slotBtns = Array.prototype.slice.call(slotWrap.querySelectorAll('.slot'));
+
+  function snapshotState() {
+    var s = { sliders: {}, toggles: {}, fogColor: document.getElementById('fogColor').value,
+              layout: layout, matPattern: matPattern, matSeed: matSeed, seed: seed, pattern: pattern, wallMode: wallMode,
+              dripHue: dripHue, dripSat: dripSat, edgeMode: edgeMode,
+              cam: { az: cam.az, el: cam.el, dist: cam.dist } };
+    sliders.forEach(function (id) { s.sliders[id] = document.getElementById(id).value; });
+    toggles.forEach(function (id) { s.toggles[id] = document.getElementById(id).checked; });
+    return s;
+  }
+  // signature of the current look at the last save/load — matching it means nothing is unsaved,
+  // so slot clicks swap instantly (easy A/B between two saves). Camera is viewpoint, not work:
+  // orbiting never counts as an unsaved change.
+  var cleanState = '';
+  function lookSig() { var s = snapshotState(); delete s.cam; return JSON.stringify(s); }
+  function applyState(s) {
+    if (!s) return;
+    // lift the attach cap before restoring so a taller save's heights aren't pre-clamped by the
+    // current tipi's max; regen recomputes the proper cap from the restored tipi height
+    document.getElementById('hlo').max = 26; document.getElementById('hhi').max = 26;
+    Object.keys(s.sliders || {}).forEach(function (id) { var el = document.getElementById(id); if (el) el.value = s.sliders[id]; });
+    Object.keys(s.toggles || {}).forEach(function (id) { var el = document.getElementById(id); if (el) el.checked = !!s.toggles[id]; });
+    if (s.fogColor) document.getElementById('fogColor').value = s.fogColor;
+    layout = s.layout || 'radial';
+    matPattern = s.matPattern || 'medium';
+    if (s.matSeed != null) matSeed = s.matSeed;
+    if (s.seed != null) seed = s.seed;
+    if (s.pattern && PATTERNS[s.pattern]) { pattern = s.pattern; updatePatUI(); }
+    wallMode = s.wallMode || (s.toggles && s.toggles.hideFront ? 'open' : 'ghost');   // legacy hideFront maps to open
+    updateWallSeg();
+    if (s.dripHue != null) { dripHue = s.dripHue; dripSat = s.dripSat || 0; drawDripWheel(); updateDripSwatch(); }
+    edgeMode = s.edgeMode || (s.toggles && s.toggles.rope === false ? 'off' : 'rope');   // legacy rope toggle
+    updateEdgeSeg();
+    // camera deliberately NOT restored: the view stays put so two saves can be A/B'd from
+    // whatever angle you're inspecting from
+    updateLayoutSeg(); updateMatSeg(); syncFigBtns(); regen();
+    cleanState = lookSig();
+  }
+  function persistSaves() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(saves)); } catch (e) {} }
+  var capT = 0;
+  function capHint() {
+    return saveArmed ? 'Pick a slot to store this look'
+         : dlArmed ? 'Pick a slot to download as a file'
+         : 'Save to a slot, then load it back';
+  }
+  function capMsg(msg) {  // transient caption, falls back to the standing hint
+    saveCap.textContent = msg;
+    clearTimeout(capT);
+    capT = setTimeout(function () { saveCap.textContent = capHint(); }, 2200);
+  }
+  function updateSaveUI() {
+    slotBtns.forEach(function (b, i) { b.classList.toggle('filled', !!saves[i]); });
+    slotWrap.classList.toggle('armed', saveArmed || dlArmed);
+    saveArmBtn.classList.toggle('armed', saveArmed);
+    dlArmBtn.classList.toggle('armed', dlArmed);
+    saveCap.textContent = capHint();
+  }
+  saveArmBtn.addEventListener('click', function () { saveArmed = !saveArmed; dlArmed = false; updateSaveUI(); });
+  dlArmBtn.addEventListener('click', function () { dlArmed = !dlArmed; saveArmed = false; updateSaveUI(); });
+  function downloadSave(i) {
+    var payload = { app: 'cenotipi-mockup', slot: i + 1, savedAt: new Date().toISOString(), config: saves[i] };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'cenotipi-config-' + (i + 1) + '.txt';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    capMsg('Downloaded save ' + (i + 1));
+  }
+  slotBtns.forEach(function (b, i) {
+    b.addEventListener('click', function () {
+      if (saveArmed) {
+        saves[i] = snapshotState(); saveArmed = false; persistSaves(); updateSaveUI();
+        cleanState = lookSig();
+        capMsg('Saved to slot ' + (i + 1));
+      } else if (dlArmed) {
+        dlArmed = false; updateSaveUI();
+        if (saves[i]) {
+          showConfirm('Download save ' + (i + 1) + ' to a text file?', function () { downloadSave(i); });
+        } else {
+          capMsg('Slot ' + (i + 1) + ' is empty — nothing to download');
+        }
+      } else if (saves[i]) {
+        if (lookSig() === cleanState) {
+          applyState(saves[i]);   // nothing unsaved — swap instantly (back-and-forth comparing)
+          capMsg('Loaded save ' + (i + 1));
+        } else {
+          showConfirm('Change to save ' + (i + 1) + '? Unsaved changes will be lost.', function () { applyState(saves[i]); });
+        }
+      } else {
+        capMsg('Slot ' + (i + 1) + ' is empty — hit Save first');
+      }
+    });
+  });
+  updateSaveUI();
+
+  // confirm popup (Yes / Cancel)
+  var confirmOv = document.getElementById('confirmOv'), confirmMsg = document.getElementById('confirmMsg');
+  var confirmCb = null;
+  function showConfirm(msg, cb) { confirmMsg.textContent = msg; confirmCb = cb; confirmOv.hidden = false; document.getElementById('confirmYes').focus(); }
+  function hideConfirm() { confirmOv.hidden = true; confirmCb = null; }
+  document.getElementById('confirmYes').addEventListener('click', function () { var cb = confirmCb; hideConfirm(); if (cb) cb(); });
+  document.getElementById('confirmNo').addEventListener('click', hideConfirm);
+  confirmOv.addEventListener('click', function (e) { if (e.target === confirmOv) hideConfirm(); });
+  addEventListener('keydown', function (e) { if (e.key === 'Escape' && !confirmOv.hidden) hideConfirm(); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (b) {
+    b.addEventListener('click', function () {
+      if (walkMode) exitWalk();
+      var v = b.getAttribute('data-view').split(',');
+      cam.az = +v[0]; cam.el = +v[1]; cam.dist = +v[2];
+      needsDraw = true;
+    });
+  });
+  var pt = document.getElementById('panelToggle');
+  pt.addEventListener('click', function () {
+    // mobile controls sheet: one body class shows/hides ALL the cards (see #ctrlWrap CSS)
+    var open = document.body.classList.toggle('ctrlOpen');
+    pt.setAttribute('aria-expanded', open ? 'true' : 'false');
+    pt.textContent = open ? 'Close' : 'Controls';
+  });
+
+  resize();
+  regen();
+  cleanState = lookSig();   // a fresh open has nothing unsaved
+  requestAnimationFrame(frame);
+  // debug handle: lets tests force a synchronous frame (RAF stalls in hidden panes)
+  window.__mock = { cam: cam, walk: walk, enterWalk: enterWalk, exitWalk: exitWalk,
+    walkOn: function () { return walkMode; },
+    draw: function (t) { readParams(); if (P.fog && fogP.length === 0) for (var w = 0; w < 140; w++) stepFog(0.09); drawScene(t || 3); } };
+})();
+</script>
