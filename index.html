@@ -1539,13 +1539,17 @@
     // drawn fabric — brown stripes along the silhouette. Clamp each sample so the pole plus
     // its half-width stays inside the faceted surface; above the hole (the exposed bundle)
     // nothing clamps, and the collar/spike geometry is untouched.
-    var inscr = Math.cos(Math.PI / NPOLES);
+    var inscr = Math.cos(Math.PI / NPOLES), bayW = Math.PI * 2 / NPOLES;
     for (var pj = 0; pj <= 8; pj++) {
       var tt = pj / 8;
       var sx = pp.b[0] + (pp.c[0] - pp.b[0]) * tt, sy = pp.b[1] + (pp.c[1] - pp.b[1]) * tt,
           sz = pp.b[2] + (pp.c[2] - pp.b[2]) * tt;
       if (sy < HOLE_H) {
-        var srr = Math.hypot(sx, sz), slim = coneR(sy) * inscr - POLE_D / 2 - 0.05;
+        // clamp to the chord depth AT THIS SAMPLE'S ANGLE (not the deepest mid-bay dip):
+        // poles stand at bay boundaries where the fabric is at full radius, so they hug the
+        // wall there and only tuck in where their line drifts across a bay on the way up
+        var soff = ((Math.atan2(sx, sz) - 0.12) % bayW + bayW) % bayW - bayW / 2;
+        var srr = Math.hypot(sx, sz), slim = coneR(sy) * inscr / Math.cos(soff) - POLE_D / 2 - 0.04;
         if (srr > slim) { sx *= slim / srr; sz *= slim / srr; }
       }
       if (proj(sx, sy, sz, pr)) {
