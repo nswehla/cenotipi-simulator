@@ -941,6 +941,20 @@
           }
           mx.push(best * 0.45);
         }
+        // smooth the safe-inset field along the loop: raw ray hits jitter vertex-to-vertex
+        // (a diagonal ray measures a limb "wider" than its neighbour's perpendicular ray),
+        // which serrated edges right at the clamp threshold — e.g. teeth along the calves.
+        // Lipschitz bound: a vertex's inset may exceed its neighbour's by 40% of their gap.
+        for (var sp = 0; sp < nn * 2; sp++) {
+          var sa2 = sp % nn, sb2 = (sp + 1) % nn;
+          var sd2 = 0.4 * Math.hypot(Lm[sb2][0] - Lm[sa2][0], Lm[sb2][1] - Lm[sa2][1]);
+          if (mx[sb2] > mx[sa2] + sd2) mx[sb2] = mx[sa2] + sd2;
+        }
+        for (sp = nn * 2; sp > 0; sp--) {
+          var sa3 = sp % nn, sb3 = (sp - 1 + nn) % nn;
+          var sd3 = 0.4 * Math.hypot(Lm[sb3][0] - Lm[sa3][0], Lm[sb3][1] - Lm[sa3][1]);
+          if (mx[sb3] > mx[sa3] + sd3) mx[sb3] = mx[sa3] + sd3;
+        }
         f.inmaxs.push(mx);
       }
     }
