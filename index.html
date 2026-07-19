@@ -1943,6 +1943,10 @@
       ctx.restore();
     }
 
+    // foam mats: flat on the floor, nothing sits under them — drawn here (not depth-sorted)
+    // so people/vines/banana always paint over them and feet never pop mid-orbit
+    if (P.matsOn) for (i = 0; i < mats.length; i++) drawMat(i);
+
     // far-side fabric facets (cutaway: near side is left open)
     // canvas: night weave -> daylight/backlight glowing warm through the fabric
     var cvR = 56 + (232 - 56) * dayF, cvG = 59 + (214 - 59) * dayF, cvB = 50 + (170 - 50) * dayF;
@@ -2131,10 +2135,8 @@
       if (P.hideFront) continue;
       solids.push([cdepth((pb.b[0] + pb.t[0]) / 2, (pb.b[1] + pb.t[1]) / 2, (pb.b[2] + pb.t[2]) / 2), 0, i]);
     }
-    for (i = 0; i < mats.length; i++) {
-      var mp = mats[i].poly, mcx = (mp[0][0] + mp[1][0] + mp[2][0] + mp[3][0]) / 4, mcz = (mp[0][1] + mp[1][1] + mp[2][1] + mp[3][1]) / 4;
-      solids.push([cdepth(mcx, MATS.T * 0.5, mcz), 1, i]);
-    }
+    // (mats are NOT depth-sorted: they're flat floor objects nothing sits under, drawn right
+    // after the floor — sorting them by centre made feet pop as the order flipped mid-orbit)
     for (i = 0; i < vines.length; i++) {
       var vk = vines[i].kind;
       if (vk === 'd' && !P.vinesDraped) continue;
@@ -2166,7 +2168,6 @@
     for (var so = 0; so < solids.length; so++) {
       var kind = solids[so][1], idx = solids[so][2];
       if (kind === 0) drawPole(idx);
-      else if (kind === 1) drawMat(idx);
       else if (kind === 2) drawVine(idx);
       else if (kind === 3) drawPerson(idx);
       else if (kind === 4) drawBanana();
