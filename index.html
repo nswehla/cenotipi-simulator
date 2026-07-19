@@ -711,7 +711,11 @@
   // around, Esc (or any view preset) exits. Position is clamped to stay inside the canvas.
   var EYE_H = 5.5;
   var walkMode = false, walk = { x: 0, z: 0, yaw: 0, pitch: 0.1 }, walkT = 0;
-  function walkLim() { return Math.max(0.5, coneR(EYE_H) - 0.7); }
+  var walkZoom = 1;   // wheel-driven FOV zoom: >1 tightens, <1 widens toward a gentle fisheye
+  // clamp against the wall ABOVE the head, not at eye height: the canvas leans inward, so an
+  // eye-level limit let the fabric a foot above the eyes slip behind the near plane and the
+  // view punched through the wall at the edge. This keeps ~1 ft of perpendicular clearance.
+  function walkLim() { return Math.max(0.5, coneR(EYE_H + 1.2) - 0.5); }
   function walkMove(fwd, str) {                      // fwd along the look heading, str = strafe right
     var sy = Math.sin(walk.yaw), cy = Math.cos(walk.yaw);
     walk.x += fwd * sy - str * cy;
@@ -729,7 +733,8 @@
       var wrl = Math.hypot(wr[0], wr[2]) || 1; wr[0] /= wrl; wr[2] /= wrl;
       bF = wf; bR = wr;
       bU = [wr[1] * wf[2] - wr[2] * wf[1], wr[2] * wf[0] - wr[0] * wf[2], wr[0] * wf[1] - wr[1] * wf[0]];
-      focal = Math.min(Wpx, Hpx) * 1.05;             // wider FOV than orbit — a head, not a telephoto
+      focal = Math.min(Wpx, Hpx) * 1.05 * walkZoom;  // wider FOV than orbit — a head, not a telephoto
+      nearZ = 0.35;   // a head can stand close to things; the wall must never near-plane-clip
       return;
     }
     var ce = Math.cos(cam.el), se = Math.sin(cam.el);
@@ -743,12 +748,14 @@
     bF = f; bR = r;
     bU = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
     focal = Math.min(Wpx, Hpx) * 1.9;
+    nearZ = 1;
   }
+  var nearZ = 1;   // near clip plane: 1 ft in orbit, 0.35 ft in walk mode (set by updateCam)
   // project into out=[sx, sy, scale]; returns false if behind camera
   function proj(x, y, z, out) {
     var dx = x - C[0], dy = y - C[1], dz = z - C[2];
     var zc = dx * bF[0] + dy * bF[1] + dz * bF[2];
-    if (zc < 1) return false;
+    if (zc < nearZ) return false;
     var s = focal / zc;
     out[0] = viewCX + (dx * bR[0] + dy * bR[1] + dz * bR[2]) * s;
     out[1] = Hpx / 2 - (dx * bU[0] + dy * bU[1] + dz * bU[2]) * s;
@@ -2695,7 +2702,9 @@
   cv.addEventListener('pointercancel', endPtr);
   cv.addEventListener('wheel', function (e) {
     e.preventDefault();
-    if (walkMode) walkMove(-Math.sign(e.deltaY) * 0.8, 0);   // scroll = step forward/back
+    // walk: scroll ZOOMS the view (WASD is how you move) — in tightens like binoculars,
+    // out widens the FOV toward a gentle fisheye so the whole room fits from inside
+    if (walkMode) walkZoom = Math.max(0.55, Math.min(2.2, walkZoom * (1 - Math.sign(e.deltaY) * 0.08)));
     else cam.dist = Math.max(4, Math.min(75, cam.dist * (1 + Math.sign(e.deltaY) * 0.08)));
     needsDraw = true;
   }, { passive: false });
@@ -2707,6 +2716,7 @@
   var vWalkBtn = document.getElementById('vWalk');
   function enterWalk() {
     walkMode = true;
+    walkZoom = 1;                                    // fresh eyes each entry
     var r0 = walkLim() * 0.85;                       // spawn just inside the door, facing the room
     walk.x = r0 * Math.sin(DOOR_A); walk.z = r0 * Math.cos(DOOR_A);
     walk.yaw = DOOR_A + Math.PI; walk.pitch = 0.1;
