@@ -1675,11 +1675,12 @@
     var maxRad = coneR(pe.h) - 0.4 - fg.halfW * pe.h;
     var prad = Math.max(0.6, Math.min(pe.radF * R, maxRad));
     var pX = prad * Math.sin(pe.ang), pZ = prad * Math.cos(pe.ang);
-    // face-on, the slice slab gives the cutout a solid edge; from steep overhead/underneath
-    // angles the same fan smears sideways into lobed double-exposure blobs. A real cutout
-    // thins toward its pure silhouette as the view verticalizes, so collapse the thickness.
+    // full thickness at every angle — from overhead the stack reads as a solid footprint.
+    // The old "double exposure" at steep angles came from the per-slice shading gradient
+    // making each copy visible, so the gradient flattens to one colour as the view steepens
+    // and the overlapping slices merge into a single solid volume.
     var steep = Math.abs(bF[1]);
-    var TH = 0.06 * pe.h * (1 - 0.85 * steep * steep), rN = TH / 2 / pe.h;
+    var TH = 0.06 * pe.h, rN = TH / 2 / pe.h;
     // projected px gap between adjacent slices: ~0 face-on, grows as the view goes overhead.
     // Each slice is stroked at this width so the stack always reads as one solid, never bands.
     var gapPx = 0;
@@ -1699,6 +1700,7 @@
       var tau2 = order[si][0], dz2 = order[si][1];
       var ins = rN * (1 - Math.sqrt(Math.max(0, 1 - tau2 * tau2)));
       var lt = 24 + 22 * (si / (SLC - 1));
+      lt = 35 + (lt - 35) * (1 - steep);   // steep view -> uniform colour, slices fuse solid
       ctx.fillStyle = 'rgb(' + ((lt * 0.82) | 0) + ',' + ((lt * 1.02 + 6) | 0) + ',' + ((lt * 1.1 + 9) | 0) + ')';
       ctx.beginPath();
       for (var li = 0; li < fg.loops.length; li++) {
