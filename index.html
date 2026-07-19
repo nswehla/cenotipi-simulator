@@ -1680,6 +1680,11 @@
       FA.push(la); FB.push(lb);
     }
     if (sA > sB) { var swp = FA; FA = FB; FB = swp; }   // larger scale = nearer: FA far, FB near
+    // the hand-traced outlines have inch-wide channels between arm and torso; as real
+    // through-tunnels they render as chaotic slits (tube wall + background slivers), so
+    // each face is stroked with its own colour wide enough to seal any channel narrower
+    // than ~1.5 in. The silhouette fattens by under an inch — invisible at scale.
+    var sealPx = Math.max(1, 0.022 * pe.h * Math.max(sA, sB));
     function figFace(FP, col) {
       ctx.beginPath();
       for (var l2 = 0; l2 < FP.length; l2++) {
@@ -1689,6 +1694,7 @@
         ctx.closePath();
       }
       ctx.fillStyle = col; ctx.fill('evenodd');
+      ctx.strokeStyle = col; ctx.lineWidth = sealPx; ctx.lineJoin = 'round'; ctx.stroke();
     }
     // three flat tones — far face darkest, side band mid, near face lightest. One tone per
     // surface means no view can ever resolve construction layers; face-on the side band is
