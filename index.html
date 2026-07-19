@@ -1960,14 +1960,17 @@
       var lit = 0.92 + 0.08 * Math.sin(am * 3);   // subtle per-facet weave shading
       // vertical slices so a facet partially behind the camera still renders its
       // visible portion (whole-quad culling made all walls vanish from inside)
+      // widen each facet a hair angularly so neighbouring bays overlap — kills the
+      // anti-aliased hairline seam between panels (~1 in of fabric, invisible)
+      var a1e = a1 - 0.01, a2e = a2 + 0.01;
       for (var seg = 0; seg < 5; seg++) {
         // slight overlap between slices hides seams — no strokes, so no horizontal lines
         var fy0 = HOLE_H * seg / 5 - (seg ? 0.06 : 0), fy1 = HOLE_H * (seg + 1) / 5;
         var fr0 = coneR(Math.max(0, fy0)), fr1 = coneR(fy1);
-        if (!(proj(fr0 * Math.sin(a1), fy0, fr0 * Math.cos(a1), pr) &&
-              proj(fr0 * Math.sin(a2), fy0, fr0 * Math.cos(a2), pr2) &&
-              proj(fr1 * Math.sin(a2), fy1, fr1 * Math.cos(a2), pr3) &&
-              proj(fr1 * Math.sin(a1), fy1, fr1 * Math.cos(a1), pr4))) continue;
+        if (!(proj(fr0 * Math.sin(a1e), fy0, fr0 * Math.cos(a1e), pr) &&
+              proj(fr0 * Math.sin(a2e), fy0, fr0 * Math.cos(a2e), pr2) &&
+              proj(fr1 * Math.sin(a2e), fy1, fr1 * Math.cos(a2e), pr3) &&
+              proj(fr1 * Math.sin(a1e), fy1, fr1 * Math.cos(a1e), pr4))) continue;
         ctx.beginPath();
         ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]);
         ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
@@ -1988,8 +1991,9 @@
         var fw = Math.sin(amw) * (C[0] - rMw * Math.sin(amw)) + nY * (C[1] - HOLE_H * 0.5) + Math.cos(amw) * (C[2] - rMw * Math.cos(amw));
         if (fw >= 0) continue;
         var rbw = coneR(0), rtw = coneR(HOLE_H);
-        if (proj(rbw * Math.sin(a1w), 0, rbw * Math.cos(a1w), pr) && proj(rbw * Math.sin(a2w), 0, rbw * Math.cos(a2w), pr2) &&
-            proj(rtw * Math.sin(a2w), HOLE_H, rtw * Math.cos(a2w), pr3) && proj(rtw * Math.sin(a1w), HOLE_H, rtw * Math.cos(a1w), pr4)) {
+        var a1we = a1w - 0.01, a2we = a2w + 0.01;   // same bay overlap as the facet fills
+        if (proj(rbw * Math.sin(a1we), 0, rbw * Math.cos(a1we), pr) && proj(rbw * Math.sin(a2we), 0, rbw * Math.cos(a2we), pr2) &&
+            proj(rtw * Math.sin(a2we), HOLE_H, rtw * Math.cos(a2we), pr3) && proj(rtw * Math.sin(a1we), HOLE_H, rtw * Math.cos(a1we), pr4)) {
           ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
         }
       }
@@ -2222,13 +2226,14 @@
         var facing2 = Math.sin(ams) * (C[0] - rMs * Math.sin(ams)) + nY * (C[1] - cyMs) + Math.cos(ams) * (C[2] - rMs * Math.cos(ams));
         if (facing2 < 0) continue;   // back facets already drawn in the main pass
         var lit2 = 0.86 + 0.08 * Math.sin(ams * 3);
+        var a1se = a1s - 0.01, a2se = a2s + 0.01;   // bay overlap — no hairline seams
         for (var seg2 = 0; seg2 < 5; seg2++) {
           var gy0 = HOLE_H * seg2 / 5 - (seg2 ? 0.06 : 0), gy1 = HOLE_H * (seg2 + 1) / 5;
           var gr0 = coneR(Math.max(0, gy0)), gr1 = coneR(gy1);
-          if (!(proj(gr0 * Math.sin(a1s), gy0, gr0 * Math.cos(a1s), pr) &&
-                proj(gr0 * Math.sin(a2s), gy0, gr0 * Math.cos(a2s), pr2) &&
-                proj(gr1 * Math.sin(a2s), gy1, gr1 * Math.cos(a2s), pr3) &&
-                proj(gr1 * Math.sin(a1s), gy1, gr1 * Math.cos(a1s), pr4))) continue;
+          if (!(proj(gr0 * Math.sin(a1se), gy0, gr0 * Math.cos(a1se), pr) &&
+                proj(gr0 * Math.sin(a2se), gy0, gr0 * Math.cos(a2se), pr2) &&
+                proj(gr1 * Math.sin(a2se), gy1, gr1 * Math.cos(a2se), pr3) &&
+                proj(gr1 * Math.sin(a1se), gy1, gr1 * Math.cos(a1se), pr4))) continue;
           ctx.beginPath();
           ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]);
           ctx.lineTo(pr3[0], pr3[1]); ctx.lineTo(pr4[0], pr4[1]); ctx.closePath();
