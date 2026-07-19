@@ -1881,20 +1881,31 @@
     // dropoff reads as one smooth gradient instead of stepped bands. Drawn FIRST, straight
     // onto the sky, and kept in every view including under grade: it's the scene's backdrop,
     // and everything above it (spray included) paints over it, so it can never block.
-    for (var db = 0; db < 24; db++) {
+    // each ring is a true ANNULUS cut at the tipi wall (evenodd against the shared inner
+    // ring) — the earth stops at the groundcloth and never fills in under the floor
+    var apIn = [], apOk = true;
+    for (var i = 0; i <= 44; i++) {
+      var daI = i / 44 * Math.PI * 2;
+      if (proj(R * Math.sin(daI), 0, R * Math.cos(daI), pr)) apIn.push([pr[0], pr[1]]);
+      else { apOk = false; break; }
+    }
+    for (var db = 0; apOk && db < 24; db++) {
       ctx.fillStyle = 'rgba(' + lerpC(60, 176) + ',' + lerpC(47, 142) + ',' + lerpC(34, 104) + ',' +
                       (0.28 * Math.pow((db + 1) / 24, 2)).toFixed(4) + ')';
       var drr3 = R + 4 - db * (4 / 24);   // 4 ft apron, fully faded by its outer edge
       ctx.beginPath();
       var okD = false;
-      for (var i = 0; i <= 44; i++) {
+      for (i = 0; i <= 44; i++) {
         var da2 = i / 44 * Math.PI * 2;
         if (proj(drr3 * Math.sin(da2), 0, drr3 * Math.cos(da2), pr)) {
           if (!okD) { ctx.moveTo(pr[0], pr[1]); okD = true; } else ctx.lineTo(pr[0], pr[1]);
         }
       }
       ctx.closePath();
-      if (okD) ctx.fill();
+      ctx.moveTo(apIn[0][0], apIn[0][1]);
+      for (i = 1; i < apIn.length; i++) ctx.lineTo(apIn[i][0], apIn[i][1]);
+      ctx.closePath();
+      if (okD) ctx.fill('evenodd');
     }
     // ALL spikes pre-draw right after the ground layer, from EVERY camera — the opaque floor,
     // canvas, and everything else then occludes them naturally, leaving them visible only
