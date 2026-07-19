@@ -2588,7 +2588,34 @@
       for (var w = 0; w < 140; w++) stepFog(0.09); // pre-roll so static view still shows fog
       needsDraw = true;
     }
-    if (needsDraw) { drawScene(simT); if (walkMode) drawWalkHint(); needsDraw = false; }
+    if (needsDraw) { drawScene(simT); if (walkMode) drawWalkHint(); drawCamHud(); needsDraw = false; }
+  }
+
+  // camera readout at the top of the screen (view-tuning aid — captures paste straight
+  // into the view presets). Toggled with the H key; off by default.
+  var hudOn = false;
+  function drawCamHud() {
+    if (!hudOn) return;
+    var msg;
+    if (walkMode) {
+      msg = 'walk x ' + walk.x.toFixed(2) + ' · z ' + walk.z.toFixed(2) +
+            ' · yaw ' + walk.yaw.toFixed(3) + ' · pitch ' + walk.pitch.toFixed(3);
+    } else {
+      msg = 'az ' + cam.az.toFixed(3) + ' rad (' + (cam.az * 180 / Math.PI).toFixed(1) + '°)' +
+            ' · el ' + cam.el.toFixed(3) + ' · dist ' + cam.dist.toFixed(1);
+    }
+    ctx.save();
+    ctx.font = '12px system-ui, "Segoe UI", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var w = ctx.measureText(msg).width + 30;
+    ctx.fillStyle = 'rgba(6, 14, 16, 0.6)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(viewCX - w / 2, 12, w, 26, 13);
+    else ctx.rect(viewCX - w / 2, 12, w, 26);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(79, 216, 196, 0.95)';
+    ctx.fillText(msg, viewCX, 25);
+    ctx.restore();
   }
 
   // ---- input ----
@@ -2649,6 +2676,9 @@
   vWalkBtn.addEventListener('click', enterWalk);
   addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { if (walkMode && confirmOv.hidden) exitWalk(); return; }
+    if ((e.key === 'h' || e.key === 'H') && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) {
+      hudOn = !hudOn; needsDraw = true; return;   // camera-readout toggle, default off
+    }
     if (!walkMode || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     var k = WALK_KEYMAP[e.code];
     if (k) { walkKeys[k] = true; e.preventDefault(); }
