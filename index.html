@@ -1567,6 +1567,14 @@
     // spike above the collar: the real-tipi pole spray. Stays through normal tilting and only
     // fades right where it would start overlapping the canvas from overhead. From below the
     // opaque canvas hides it completely (never draw the spray through the fabric).
+    // near-side spikes in solid mode draw AFTER the wall (they sit above the canvas) — see
+    // the repaint pass in drawScene; every other case draws its spike here
+    if (!shaftHidden) drawPoleSpike(i, pcol);
+  }
+  // pole spike above the collar — callable both from the normal pole pass and from the
+  // post-wall repaint in solid mode (where the spray is exterior and must cover the canvas)
+  function drawPoleSpike(i, col) {
+    var pp = poles[i];
     // tilt fade keeps the spray from overlaying the INTERIOR seen from overhead — but in
     // solid (full canvas) mode the spray is exterior and real, so it stays fully opaque at
     // any tilt. The below-ground gate stays in every mode (never through the canvas).
@@ -1590,7 +1598,7 @@
       ctx.lineTo(qx - qnx, qy - qny);
       ctx.lineTo(pr[0] - snx, pr[1] - sny);
       ctx.closePath();
-      ctx.fillStyle = shaftHidden ? 'rgba(99,78,53,0.95)' : pcol;   // exterior spikes read solid
+      ctx.fillStyle = col;
       ctx.fill();
       ctx.restore();
     }
@@ -2236,6 +2244,16 @@
         for (i = 1; i < doorPts.length; i++) ctx.lineTo(doorPts[i][0], doorPts[i][1]);
         ctx.closePath();
         ctx.strokeStyle = 'rgba(150,160,150,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      // near-side pole spikes sit ABOVE the canvas, between it and an outside camera — repaint
+      // them over the wall. From inside, the opaque canvas rightly hides them, so gate on the
+      // camera being outside the cone.
+      if (Math.hypot(C[0], C[2]) > coneR(Math.max(0, Math.min(C[1], H)))) {
+        for (i = 0; i < NPOLES; i++) {
+          var pw = poles[i];
+          var pwF = Math.sin(pw.a) * (C[0] - pw.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pw.a) * (C[2] - pw.b[2]);
+          if (pwF >= 0) drawPoleSpike(i, 'rgba(99,78,53,0.95)');
+        }
       }
     } else if (!P.hideFront) {
       // ghost front: the translucent near wall is drawn LAST so it reads as a veil over the
