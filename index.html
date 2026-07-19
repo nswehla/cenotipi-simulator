@@ -380,7 +380,12 @@
     </div>
     <div class="togrow">
       <label><input type="checkbox" id="vinesDraped" checked> Draped vines</label>
-      <input type="number" id="drapedFt" min="0" max="400" step="10" value="100">
+      <input type="range" id="drapedFt" min="0" max="400" step="1" value="100" hidden>
+      <div class="stepper">
+        <button type="button" class="step-btn" data-stepfor="drapedFt" data-dir="-1" aria-label="Less draped vine footage"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <input type="number" class="numbox" id="drapedFtNum" min="0" max="400" step="1" value="100" aria-label="Draped vine footage in feet">
+        <button type="button" class="step-btn" data-stepfor="drapedFt" data-dir="1" aria-label="More draped vine footage"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 6.5 L5 3.5 L8 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
       <span class="unit">ft</span>
     </div>
     <div class="togrow">
@@ -496,7 +501,15 @@
     </div>
     <div class="row"><label for="ropeH">Mount height</label><input type="range" id="ropeH" min="0" max="10" step="0.5" value="0.5"><output for="ropeH">0.5 ft</output></div>
     <div class="row"><label for="ropeDrape">Rope drape</label><input type="range" id="ropeDrape" min="0" max="5" step="0.25" value="0.25"><output for="ropeDrape">0.25 ft</output></div>
-    <div class="row"><label for="ropeSp">Pixel spacing</label><input type="number" id="ropeSp" min="0.5" max="24" step="0.5" value="1"><output for="ropeSp">1 in</output></div>
+    <div class="row"><label for="ropeSpNum">Pixel spacing</label>
+      <input type="range" id="ropeSp" min="0.5" max="24" step="0.25" value="1" hidden>
+      <div class="stepper">
+        <button type="button" class="step-btn" data-stepfor="ropeSp" data-dir="-1" aria-label="Tighter pixel spacing"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <input type="number" class="numbox" id="ropeSpNum" min="0.5" max="24" step="0.25" value="1" aria-label="Pixel spacing in inches">
+        <button type="button" class="step-btn" data-stepfor="ropeSp" data-dir="1" aria-label="Wider pixel spacing"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 6.5 L5 3.5 L8 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <span class="unit">in</span>
+    </div>
   </div>
 
 </div>
@@ -2334,6 +2347,11 @@
       // fabric than through the open door (they used to be identical: no veil was drawn at
       // all, just seams and outlines). No bay widening / slice overlap here: doubled
       // translucent fills band visibly, and the seam strokes cover the hairlines instead.
+      // Approaching top-down the whole ghost front FADES AWAY (deliberate look preference:
+      // an open plan view beats a mostly-occluded top) — late, from el 1.13 to ~1.38.
+      var veilFade = 1 - Math.max(0, Math.min(1, (cam.el - 1.13) / 0.25));
+      if (veilFade > 0.01) {
+      ctx.globalAlpha = veilFade;
       ctx.save();
       var gdcx = coneR(2) * Math.sin(DOOR_A), gdcz = coneR(2) * Math.cos(DOOR_A);
       if (Math.sin(DOOR_A) * (C[0] - gdcx) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - gdcz) >= 0) {
@@ -2412,6 +2430,8 @@
           ctx.strokeStyle = 'rgba(160,172,164,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
         }
       }
+      ctx.globalAlpha = 1;
+      }   // end veilFade gate
     }
 
     // measurement guides on top while a slider is being adjusted
@@ -2742,9 +2762,9 @@
   addEventListener('pointerup', function () { if (guideHeld) { guideHeld = false; guideT = performance.now(); } });
   addEventListener('pointercancel', function () { if (guideHeld) { guideHeld = false; guideT = performance.now(); } });
   document.getElementById('fogColor').addEventListener('input', regen);
-  // tipi dimensions: hidden range input holds the canonical (clamped, stepped) value; the
+  // stepper controls: hidden range input holds the canonical (clamped, stepped) value; the
   // visible UI is the stepper arrows + editable number box, kept in lockstep with it
-  ['tipiH', 'tipiD', 'tipiP'].forEach(function (sid) {
+  ['tipiH', 'tipiD', 'tipiP', 'drapedFt', 'ropeSp'].forEach(function (sid) {
     var sl = document.getElementById(sid), nb = document.getElementById(sid + 'Num');
     Array.prototype.forEach.call(document.querySelectorAll('.step-btn[data-stepfor=' + sid + ']'), function (btn) {
       btn.addEventListener('click', function () {
