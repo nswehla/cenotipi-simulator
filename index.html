@@ -1599,9 +1599,14 @@
   // post-wall repaint in solid mode (where the spray is exterior and must cover the canvas)
   function drawPoleSpike(i, col) {
     var pp = poles[i];
-    // always fully opaque: spikes pre-draw before everything, so from any camera the opaque
-    // floor/canvas occludes exactly the parts a real spray would hide — no alpha tricks
+    // occlusion handles every angle (spikes pre-draw before everything), plus one deliberate
+    // look preference: approaching top-down the spray FADES AWAY (el 1.13 -> ~1.38) instead
+    // of occluding the apex view. Solid mode keeps the real exterior wood at any tilt, and
+    // walk mode never applies the orbit fade.
+    var sa = (P.wallSolid || walkMode) ? 1 : Math.max(0, Math.min(1, 1 - (cam.el - 1.13) / 0.25));
+    if (sa <= 0.01) return;
     if (proj(pp.c[0], pp.c[1], pp.c[2], pr) && proj(pp.t[0], pp.t[1], pp.t[2], pr2)) {
+      ctx.globalAlpha = sa;
       // one filled polygon: holds near-full shaft width for the first two-thirds, then
       // tapers to a sharp point over the last stretch
       var sdx2 = pr2[0] - pr[0], sdy2 = pr2[1] - pr[1];
@@ -1619,6 +1624,7 @@
       ctx.closePath();
       ctx.fillStyle = col;
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
   }
   function drawMat(mi) {
