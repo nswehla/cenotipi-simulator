@@ -1531,45 +1531,45 @@
     var pFacing = Math.sin(pp.a) * (C[0] - pp.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pp.a) * (C[2] - pp.b[2]);
     var pcol = pFacing < 0 ? 'rgba(99,78,53,0.95)' : 'rgba(72,58,42,0.45)';
     ctx.lineCap = 'round';
-    // solid front wall: near-pole shafts are hidden behind the fabric, but their spikes still
-    // rise above the apex — draw only the spike
-    var shaftHidden = pFacing >= 0 && P.wallSolid;
-    if (!shaftHidden) {
-      // shaft base -> collar as ONE filled polygon with a per-sample width: a smooth
-      // perspective taper with no per-segment stroke joints banding up the pole
-      var run = [];
-      for (var pj = 0; pj <= 8; pj++) {
-        var tt = pj / 8;
-        if (proj(pp.b[0] + (pp.c[0] - pp.b[0]) * tt, pp.b[1] + (pp.c[1] - pp.b[1]) * tt,
-                 pp.b[2] + (pp.c[2] - pp.b[2]) * tt, pr)) {
-          run.push([pr[0], pr[1], Math.max(0.75, Math.min(15, pr[2] * POLE_D / 2))]);
-        } else if (run.length) break;   // keep the contiguous visible stretch (walk-mode near plane)
-      }
-      if (run.length >= 2) {
-        var lsd = [], rsd = [];
-        for (var ri = 0; ri < run.length; ri++) {
-          var rA = run[Math.max(0, ri - 1)], rB = run[Math.min(run.length - 1, ri + 1)];
-          var rdx = rB[0] - rA[0], rdy = rB[1] - rA[1];
-          var rdl = Math.hypot(rdx, rdy) || 1;
-          var rnx = -rdy / rdl * run[ri][2], rny = rdx / rdl * run[ri][2];
-          lsd.push([run[ri][0] + rnx, run[ri][1] + rny]);
-          rsd.push([run[ri][0] - rnx, run[ri][1] - rny]);
-        }
-        ctx.beginPath();
-        ctx.moveTo(lsd[0][0], lsd[0][1]);
-        for (ri = 1; ri < lsd.length; ri++) ctx.lineTo(lsd[ri][0], lsd[ri][1]);
-        for (ri = rsd.length - 1; ri >= 0; ri--) ctx.lineTo(rsd[ri][0], rsd[ri][1]);
-        ctx.closePath();
-        ctx.fillStyle = pcol;
-        ctx.fill();
-      }
+    // solid mode: shafts draw at full strength — the opaque wall pass covers whatever fabric
+    // hides, and what remains visible (through the door, through the smoke hole) is real wood
+    if (P.wallSolid) pcol = 'rgba(99,78,53,0.95)';
+    drawPoleShaft(i, pcol);
+    // spike above the collar: the real-tipi pole spray. In solid mode the NEAR spikes sit
+    // above the canvas and repaint after the wall pass instead (see drawScene).
+    if (!(pFacing >= 0 && P.wallSolid)) drawPoleSpike(i, pcol);
+  }
+  // shaft base -> collar as ONE filled polygon with a per-sample width: a smooth perspective
+  // taper with no per-segment stroke joints. Callable from the normal pass and from the
+  // smoke-hole-clipped repaint in solid mode.
+  function drawPoleShaft(i, col) {
+    var pp = poles[i];
+    var run = [];
+    for (var pj = 0; pj <= 8; pj++) {
+      var tt = pj / 8;
+      if (proj(pp.b[0] + (pp.c[0] - pp.b[0]) * tt, pp.b[1] + (pp.c[1] - pp.b[1]) * tt,
+               pp.b[2] + (pp.c[2] - pp.b[2]) * tt, pr)) {
+        run.push([pr[0], pr[1], Math.max(0.75, Math.min(15, pr[2] * POLE_D / 2))]);
+      } else if (run.length) break;   // keep the contiguous visible stretch (walk-mode near plane)
     }
-    // spike above the collar: the real-tipi pole spray. Stays through normal tilting and only
-    // fades right where it would start overlapping the canvas from overhead. From below the
-    // opaque canvas hides it completely (never draw the spray through the fabric).
-    // near-side spikes in solid mode draw AFTER the wall (they sit above the canvas) — see
-    // the repaint pass in drawScene; every other case draws its spike here
-    if (!shaftHidden) drawPoleSpike(i, pcol);
+    if (run.length >= 2) {
+      var lsd = [], rsd = [];
+      for (var ri = 0; ri < run.length; ri++) {
+        var rA = run[Math.max(0, ri - 1)], rB = run[Math.min(run.length - 1, ri + 1)];
+        var rdx = rB[0] - rA[0], rdy = rB[1] - rA[1];
+        var rdl = Math.hypot(rdx, rdy) || 1;
+        var rnx = -rdy / rdl * run[ri][2], rny = rdx / rdl * run[ri][2];
+        lsd.push([run[ri][0] + rnx, run[ri][1] + rny]);
+        rsd.push([run[ri][0] - rnx, run[ri][1] - rny]);
+      }
+      ctx.beginPath();
+      ctx.moveTo(lsd[0][0], lsd[0][1]);
+      for (ri = 1; ri < lsd.length; ri++) ctx.lineTo(lsd[ri][0], lsd[ri][1]);
+      for (ri = rsd.length - 1; ri >= 0; ri--) ctx.lineTo(rsd[ri][0], rsd[ri][1]);
+      ctx.closePath();
+      ctx.fillStyle = col;
+      ctx.fill();
+    }
   }
   // pole spike above the collar — callable both from the normal pole pass and from the
   // post-wall repaint in solid mode (where the spray is exterior and must cover the canvas)
@@ -2245,10 +2245,25 @@
         ctx.closePath();
         ctx.strokeStyle = 'rgba(150,160,150,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
       }
-      // near-side pole spikes sit ABOVE the canvas, between it and an outside camera — repaint
-      // them over the wall. From inside, the opaque canvas rightly hides them, so gate on the
-      // camera being outside the cone.
+      // Exterior camera only (from inside, the opaque canvas rightly hides all of this):
       if (Math.hypot(C[0], C[2]) > coneR(Math.max(0, Math.min(C[1], H)))) {
+        // 1) through the smoke hole you see the converging pole BUNDLE, not a clear window
+        //    down to the fog machine — redraw every shaft clipped to the hole's opening
+        ctx.save();
+        ctx.beginPath();
+        var hF = true, hok = true;
+        for (var hh = 0; hh <= 24; hh++) {
+          var ha = hh / 24 * Math.PI * 2;
+          if (proj(HOLE_R * Math.sin(ha), HOLE_H, HOLE_R * Math.cos(ha), pr)) {
+            if (hF) { ctx.moveTo(pr[0], pr[1]); hF = false; } else ctx.lineTo(pr[0], pr[1]);
+          } else { hok = false; break; }
+        }
+        if (hok && !hF) {
+          ctx.closePath(); ctx.clip();
+          for (i = 0; i < NPOLES; i++) drawPoleShaft(i, 'rgba(99,78,53,0.95)');
+        }
+        ctx.restore();
+        // 2) near-side spikes sit ABOVE the canvas, between it and the camera — repaint them
         for (i = 0; i < NPOLES; i++) {
           var pw = poles[i];
           var pwF = Math.sin(pw.a) * (C[0] - pw.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pw.a) * (C[2] - pw.b[2]);
