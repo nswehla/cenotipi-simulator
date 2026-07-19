@@ -888,13 +888,13 @@
     { id: 'pTod', fig: 'toddler', h: 2.25, ang: 5.05, radF: 0.44, label: "2'3\"", chest: 0.5 }
   ];
   for (var ppi = 0; ppi < PEOPLE.length; ppi++) PEOPLE[ppi].data = FIGURES[PEOPLE[ppi].fig];
-  // per-vertex INWARD normals for each outline loop — used to round the depth edges by
-  // offsetting the outline inward along its normal (uniform border), not by scaling.
+  // visual horizontal centre of each figure = area centroid of the main outline (extent
+  // midpoints mislead when a stray arm or stance skews the bounding box) — centres the
+  // chest label. (The figures render as exact extrusions in drawPerson — no offset outlines,
+  // so no per-vertex normal machinery is needed here.)
   (function () {
     for (var fk in FIGURES) {
-      var f = FIGURES[fk]; f.norms = [];
-      // visual horizontal centre = area centroid of the main outline (extent midpoints mislead
-      // when a stray arm or stance skews the bounding box) — used to centre the chest label
+      var f = FIGURES[fk];
       var L0 = f.loops[0], aSum = 0, cxSum = 0;
       for (var lc = 0; lc < L0.length; lc++) {
         var pA2 = L0[lc], pB2 = L0[(lc + 1) % L0.length];
@@ -902,61 +902,6 @@
         aSum += cr2; cxSum += (pA2[0] + pB2[0]) * cr2;
       }
       f.cx = aSum !== 0 ? cxSum / (3 * aSum) : 0;
-      for (var li = 0; li < f.loops.length; li++) {
-        var L = f.loops[li], n = L.length, A = 0, i;
-        for (i = 0; i < n; i++) { var a = L[i], b = L[(i + 1) % n]; A += a[0] * b[1] - b[0] * a[1]; }
-        var s = A > 0 ? 1 : -1;  // inward-normal sign from winding
-        var nm = [];
-        for (i = 0; i < n; i++) {
-          var p0 = L[(i - 1 + n) % n], p1 = L[i], p2 = L[(i + 1) % n];
-          var n1x = s * -(p1[1] - p0[1]), n1y = s * (p1[0] - p0[0]);
-          var n2x = s * -(p2[1] - p1[1]), n2y = s * (p2[0] - p1[0]);
-          var l1 = Math.hypot(n1x, n1y) || 1, l2 = Math.hypot(n2x, n2y) || 1;
-          var vx = n1x / l1 + n2x / l2, vy = n1y / l1 + n2y / l2, vl = Math.hypot(vx, vy) || 1;
-          nm.push([vx / vl, vy / vl]);
-        }
-        f.norms.push(nm);
-      }
-      // per-vertex SAFE inset: distance along the inward normal to the outline's far side
-      // (ray-cast against every segment of every loop). Features thinner than the slab's
-      // edge-rounding inset — hands, arms — otherwise flip inside-out when offset, drawing
-      // garbled doubled silhouettes; each vertex may inset at most ~45% of its local width.
-      f.inmaxs = [];
-      for (li = 0; li < f.loops.length; li++) {
-        var Lm = f.loops[li], nmL = f.norms[li], nn = Lm.length, mx = [];
-        for (i = 0; i < nn; i++) {
-          var Px = Lm[i][0], Py = Lm[i][1], Nx = nmL[i][0], Ny = nmL[i][1], best = 1;
-          for (var lj = 0; lj < f.loops.length; lj++) {
-            var Ls = f.loops[lj], ns = Ls.length;
-            for (var sj = 0; sj < ns; sj++) {
-              if (lj === li && (sj === i || (sj + 1) % ns === i)) continue;
-              var Ax = Ls[sj][0], Ay = Ls[sj][1];
-              var dx2 = Ls[(sj + 1) % ns][0] - Ax, dy2 = Ls[(sj + 1) % ns][1] - Ay;
-              var den = Nx * dy2 - Ny * dx2;
-              if (Math.abs(den) < 1e-9) continue;
-              var tt2 = ((Ax - Px) * dy2 - (Ay - Py) * dx2) / den;
-              var uu = ((Ax - Px) * Ny - (Ay - Py) * Nx) / den;
-              if (tt2 > 1e-4 && uu >= 0 && uu <= 1 && tt2 < best) best = tt2;
-            }
-          }
-          mx.push(best * 0.45);
-        }
-        // smooth the safe-inset field along the loop: raw ray hits jitter vertex-to-vertex
-        // (a diagonal ray measures a limb "wider" than its neighbour's perpendicular ray),
-        // which serrated edges right at the clamp threshold — e.g. teeth along the calves.
-        // Lipschitz bound: a vertex's inset may exceed its neighbour's by 40% of their gap.
-        for (var sp = 0; sp < nn * 2; sp++) {
-          var sa2 = sp % nn, sb2 = (sp + 1) % nn;
-          var sd2 = 0.4 * Math.hypot(Lm[sb2][0] - Lm[sa2][0], Lm[sb2][1] - Lm[sa2][1]);
-          if (mx[sb2] > mx[sa2] + sd2) mx[sb2] = mx[sa2] + sd2;
-        }
-        for (sp = nn * 2; sp > 0; sp--) {
-          var sa3 = sp % nn, sb3 = (sp - 1 + nn) % nn;
-          var sd3 = 0.4 * Math.hypot(Lm[sb3][0] - Lm[sa3][0], Lm[sb3][1] - Lm[sa3][1]);
-          if (mx[sb3] > mx[sa3] + sd3) mx[sb3] = mx[sa3] + sd3;
-        }
-        f.inmaxs.push(mx);
-      }
     }
   })();
 
@@ -1712,75 +1657,60 @@
     var fhx = bF[0], fhz = bF[2], fhl = Math.hypot(fhx, fhz) || 1e-3;
     var rgx = fhz / fhl, rgz = -fhx / fhl;   // billboard left-right (horizontal)
     var Dx = fhx / fhl, Dz = fhz / fhl;      // depth axis = horizontal camera facing
-    var SLC = 21;
     var maxRad = coneR(pe.h) - 0.4 - fg.halfW * pe.h;
     var prad = Math.max(0.6, Math.min(pe.radF * R, maxRad));
     var pX = prad * Math.sin(pe.ang), pZ = prad * Math.cos(pe.ang);
-    // full thickness at every angle — from overhead the stack reads as a solid footprint.
-    // The old "double exposure" at steep angles came from the per-slice shading gradient
-    // making each copy visible, so the gradient flattens to one colour as the view steepens
-    // and the overlapping slices merge into a single solid volume.
-    var steep = Math.abs(bF[1]);
-    var TH = 0.06 * pe.h, rN = TH / 2 / pe.h;
-    // projected px gap between adjacent slices: ~0 face-on, grows as the view goes overhead.
-    // Each slice is stroked at this width so the stack always reads as one solid, never bands.
-    var gapPx = 0;
-    if (proj(pX - Dx * TH / 2, fg.cy * pe.h, pZ - Dz * TH / 2, pr) &&
-        proj(pX + Dx * TH / 2, fg.cy * pe.h, pZ + Dz * TH / 2, pr2)) {
-      gapPx = Math.hypot(pr2[0] - pr[0], pr2[1] - pr[1]) / (SLC - 1);
+    var TH = 0.06 * pe.h;
+    // the figure is an EXACT extruded cutout, not a stack of outline copies: every outline
+    // vertex projects once onto each face of the slab, and the solid draws as far face ->
+    // one side-wall quad per outline edge -> near face. Adjacent pieces share projected
+    // vertices, so the shape is watertight by construction at every distance and tilt —
+    // nothing can fan apart, crack open, or laminate (the old 21-slice stack did all three
+    // up close). Inner loops get side walls too: through-holes read as real tubes.
+    var FA = [], FB = [], sA = 0, sB = 0, li, q;
+    for (li = 0; li < fg.loops.length; li++) {
+      var loop = fg.loops[li], la = [], lb = [];
+      for (q = 0; q < loop.length; q++) {
+        var ox = loop[q][0] * pe.h, oy = loop[q][1] * pe.h + 0.02;
+        if (!proj(pX + rgx * ox - Dx * TH / 2, oy, pZ + rgz * ox - Dz * TH / 2, pr)) return;
+        la.push([pr[0], pr[1]]); sA = pr[2];
+        if (!proj(pX + rgx * ox + Dx * TH / 2, oy, pZ + rgz * ox + Dz * TH / 2, pr)) return;
+        lb.push([pr[0], pr[1]]); sB = pr[2];
+      }
+      FA.push(la); FB.push(lb);
     }
-    // THE invariant: the slice construction must never be resolvable. The per-slice shading
-    // gradient may only exist while the slices land on the same pixels — the moment they fan
-    // apart on screen (oblique view, close-up, overhead), every layer would get its own
-    // readable tone, so the gradient fades to one uniform colour and the 21 outlines fuse
-    // into a single solid silhouette. gapPx is exactly that screen-space fan-out.
-    var fuse = Math.max(steep, Math.min(1, gapPx / 1.5));
-    var order = [];
-    for (var k = 0; k < SLC; k++) {
-      var tau = (k / (SLC - 1)) * 2 - 1, dz = (TH / 2) * tau;
-      order.push([tau, dz, (pX + Dx * dz - C[0]) * bF[0] + (pZ + Dz * dz - C[2]) * bF[2]]);
-    }
-    order.sort(function (a, b) { return b[2] - a[2]; });
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    var bad = false;
-    for (var si = 0; si < SLC && !bad; si++) {
-      var tau2 = order[si][0], dz2 = order[si][1];
-      var edgeT = 1 - Math.sqrt(Math.max(0, 1 - tau2 * tau2));   // 0 mid-depth -> 1 at the faces
-      var ins = rN * edgeT;
-      // the normal-inset can't shrink features thinner than itself (hands, arms), so from
-      // overhead the slab's front/back faces stayed sharp full-width outline cards. From
-      // steep views the outer slices ALSO scale toward the body centre — thin features taper
-      // properly and the depth faces round off. Face-on (steep = 0) this is exactly zero.
-      var scT = 1 - steep * steep * 0.15 * edgeT;
-      var lt = 24 + 22 * (si / (SLC - 1));
-      lt = 35 + (lt - 35) * (1 - fuse);   // slices fanned apart -> uniform colour, fuse solid
-      ctx.fillStyle = 'rgb(' + ((lt * 0.82) | 0) + ',' + ((lt * 1.02 + 6) | 0) + ',' + ((lt * 1.1 + 9) | 0) + ')';
+    if (sA > sB) { var swp = FA; FA = FB; FB = swp; }   // larger scale = nearer: FA far, FB near
+    function figFace(FP, col) {
       ctx.beginPath();
-      for (var li = 0; li < fg.loops.length; li++) {
-        var loop = fg.loops[li], nrm = fg.norms[li], imx = fg.inmaxs[li], started = false;
-        for (var q = 0; q < loop.length; q++) {
-          var insQ = ins < imx[q] ? ins : imx[q];   // never inset past the local half-width
-          var ox = ((loop[q][0] + nrm[q][0] * insQ - fg.cx) * scT + fg.cx) * pe.h;
-          var oy = ((loop[q][1] + nrm[q][1] * insQ - fg.cy) * scT + fg.cy) * pe.h + 0.02;
-          if (!proj(pX + rgx * ox + Dx * dz2, oy, pZ + rgz * ox + Dz * dz2, pr)) { bad = true; break; }
-          if (!started) { ctx.moveTo(pr[0], pr[1]); started = true; } else ctx.lineTo(pr[0], pr[1]);
-        }
-        if (bad) break;
+      for (var l2 = 0; l2 < FP.length; l2++) {
+        var pts = FP[l2];
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        for (var q2 = 1; q2 < pts.length; q2++) ctx.lineTo(pts[q2][0], pts[q2][1]);
         ctx.closePath();
       }
-      if (!bad) {
-        ctx.fill('evenodd');
-        if (gapPx > 0.6) {   // bridge to the neighbouring slice so the stack is watertight
-          ctx.strokeStyle = ctx.fillStyle;
-          ctx.lineWidth = gapPx * 1.3;
-          ctx.stroke();
-        }
+      ctx.fillStyle = col; ctx.fill('evenodd');
+    }
+    // three flat tones — far face darkest, side band mid, near face lightest. One tone per
+    // surface means no view can ever resolve construction layers; face-on the side band is
+    // edge-on (a hairline contour), and tilted views show it as the slab's honest edge.
+    figFace(FA, 'rgb(21,32,37)');
+    ctx.fillStyle = 'rgb(26,38,44)'; ctx.strokeStyle = 'rgb(26,38,44)';
+    ctx.lineWidth = 0.75; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (li = 0; li < FA.length; li++) {
+      var LA = FA[li], LB = FB[li], n2 = LA.length;
+      for (q = 0; q < n2; q++) {
+        var q1 = (q + 1) % n2;
+        ctx.beginPath();
+        ctx.moveTo(LA[q][0], LA[q][1]); ctx.lineTo(LA[q1][0], LA[q1][1]);
+        ctx.lineTo(LB[q1][0], LB[q1][1]); ctx.lineTo(LB[q][0], LB[q][1]);
+        ctx.closePath(); ctx.fill(); ctx.stroke();   // stroke seals AA seams between quads
       }
     }
+    figFace(FB, 'rgb(31,44,51)');
     // height label worn on the chest (~72% of height; less for big-headed kids/toddlers),
     // centred on the body's actual visual middle (stances aren't symmetric about the anchor)
     var lcx = (fg.cx || 0) * pe.h;
-    if (!bad && proj(pX + rgx * lcx, pe.h * (pe.chest || 0.72), pZ + rgz * lcx, pr2)) {
+    if (proj(pX + rgx * lcx, pe.h * (pe.chest || 0.72), pZ + rgz * lcx, pr2)) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(217,230,226,0.85)';
       ctx.fillText(pe.label, pr2[0], pr2[1]);
