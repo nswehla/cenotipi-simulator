@@ -1609,8 +1609,9 @@
     }
   }
   function drawMat(mi) {
-    // fade mats out quickly as the camera drops below the floor (don't show their undersides)
-    var matFade = Math.max(0, Math.min(1, 1 + cam.el / 0.2));
+    // fade by CAMERA HEIGHT: gone once the camera is below the floor plane (never show mat
+    // undersides), full within the first foot up — works identically in orbit and walk mode
+    var matFade = Math.max(0, Math.min(1, C[1] / 1.2));
     if (matFade <= 0.001) return;
     ctx.globalAlpha = matFade;
     var mt = mats[mi], mo = mt.o, mcols = MAT_COLS[mt.col], i;
@@ -1882,9 +1883,10 @@
     // wall pass since there it's real exterior wood sitting in front of opaque fabric.
     for (var spk = 0; spk < NPOLES; spk++) drawPoleSpike(spk, 'rgba(99,78,53,0.95)');
 
-    // dirt apron around the tipi: stacked translucent discs accumulate toward the tipi edge and
-    // fade out with distance; hidden once the camera dips below ground (like the mats)
-    var groundFade = Math.max(0, Math.min(1, 1 + cam.el / 0.2));
+    // dirt apron around the tipi: stacked translucent discs accumulate toward the tipi edge.
+    // Faded by CAMERA HEIGHT (not orbit angle): gone the moment the camera passes below the
+    // floor plane — nothing on the ground layer ever shows in a view up through the floor.
+    var groundFade = Math.max(0, Math.min(1, C[1] / 1.2));
     if (groundFade > 0.01) {
       // brown packed earth, near-solid at the wall, gone by ~4 ft. 24 rings on a quadratic
       // alpha ramp — the outermost ring is nearly invisible, so the dropoff reads as one
@@ -1906,7 +1908,11 @@
       }
     }
 
-    // ground disc
+    // ground disc — ONLY when the camera is above the floor plane. From underneath the whole
+    // floor layer stays hidden, so looking up through it (and through the door/smoke-hole
+    // openings) you see the pre-drawn sky and pole spray, never a stray patch of groundcloth.
+    // At the crossing the disc is edge-on (zero area), so the cutoff is invisible.
+    if (C[1] > 0.05) {
     ctx.beginPath();
     var first = true;
     for (var i = 0; i <= 44; i++) {
@@ -1959,6 +1965,7 @@
       }
       ctx.restore();
     }
+    }   // end camera-above-floor gate
 
     // foam mats: flat on the floor, nothing sits under them — drawn here (not depth-sorted)
     // so people/vines/banana always paint over them and feet never pop mid-orbit
