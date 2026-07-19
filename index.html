@@ -2383,11 +2383,9 @@
       // fabric than through the open door (they used to be identical: no veil was drawn at
       // all, just seams and outlines). No bay widening / slice overlap here: doubled
       // translucent fills band visibly, and the seam strokes cover the hairlines instead.
-      // Approaching top-down the whole ghost front FADES AWAY (deliberate look preference:
-      // an open plan view beats a mostly-occluded top) — late, from el 1.13 to ~1.38.
-      var veilFade = 1 - Math.max(0, Math.min(1, (cam.el - 1.13) / 0.25));
-      if (veilFade > 0.01) {
-      ctx.globalAlpha = veilFade;
+      // (no elevation fade here: the fabric stays present from above — near-opaque via the
+      // camera-height ramp below — until the camera genuinely descends in through the hole.
+      // Only the SPRAY fades with elevation, per nswehla.)
       ctx.save();
       var gdcx = coneR(2) * Math.sin(DOOR_A), gdcz = coneR(2) * Math.cos(DOOR_A);
       if (Math.sin(DOOR_A) * (C[0] - gdcx) + nY * (C[1] - 2) + Math.cos(DOOR_A) * (C[2] - gdcz) >= 0) {
@@ -2466,8 +2464,6 @@
           ctx.strokeStyle = 'rgba(160,172,164,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
         }
       }
-      ctx.globalAlpha = 1;
-      }   // end veilFade gate
     }
 
     // measurement guides on top while a slider is being adjusted
