@@ -1772,7 +1772,10 @@
       var dh = 2.3 + (dcs >= 0 ? 2.0 : 1.7) * dcs;
       var hn = (dh - 0.6) / 3.7;
       var dw = dwHalf * (dsn >= 0 ? 1 : -1) * Math.pow(Math.abs(dsn), 0.62) * (1.06 - 0.34 * hn);
-      var drr = coneR(dh) * 1.01;
+      // ON the drawn fabric: the canvas renders as chord facets INSIDE the true cone circle,
+      // and the door sits mid-bay where the chord dips deepest — placing its points at the
+      // inscribed radius keeps the rim on the wall instead of floating outside the silhouette
+      var drr = coneR(dh) * Math.cos(Math.PI / NPOLES);
       if (proj(drr * Math.sin(DOOR_A + dw), dh, drr * Math.cos(DOOR_A + dw), pr)) out.push([pr[0], pr[1]]);
     }
     return out;
