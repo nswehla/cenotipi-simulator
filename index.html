@@ -2250,8 +2250,10 @@
         ctx.closePath();
         ctx.strokeStyle = 'rgba(150,160,150,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
       }
-      // Exterior camera only (from inside, the opaque canvas rightly hides all of this):
-      if (Math.hypot(C[0], C[2]) > coneR(Math.max(0, Math.min(C[1], H)))) {
+      // Exterior ABOVE-GROUND camera only: from inside the opaque canvas rightly hides all of
+      // this, and from underneath (orbit camera below ground) the hole must show the emitter,
+      // not a repainted bundle — horizontal distance alone misreads that camera as outside.
+      if (C[1] > 0.5 && Math.hypot(C[0], C[2]) > coneR(Math.max(0, Math.min(C[1], H)))) {
         // 1) through the smoke hole you see the converging pole BUNDLE, not a clear window
         //    down to the fog machine — redraw every shaft clipped to the hole's opening
         ctx.save();
