@@ -1562,7 +1562,15 @@
   function drawPole(i) {
     var pp = poles[i], nY = (R - HOLE_R) / H;
     var pFacing = Math.sin(pp.a) * (C[0] - pp.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pp.a) * (C[2] - pp.b[2]);
-    var pcol = pFacing < 0 ? 'rgba(99,78,53,0.95)' : 'rgba(72,58,42,0.45)';
+    // hovering ABOVE the tent over its footprint, "near vs far" degenerates — the plane
+    // test flipped poles to opaque interior wood while the camera was still well above the
+    // apex. Until the camera genuinely drops in through the hole, poles keep the
+    // translucent seen-from-outside treatment; the flip to opaque happens at entry.
+    // (Side views are untouched: the horizontal gate zeroes this out beyond the footprint.)
+    var overF = Math.max(0, Math.min(1, (C[1] - HOLE_H) / 3)) *
+                Math.max(0, Math.min(1, (R + 4 - Math.hypot(C[0], C[2])) / 4));
+    var k = pFacing < 0 ? 1 - overF : 0;
+    var pcol = 'rgba(' + ((72 + 27 * k) | 0) + ',' + ((58 + 20 * k) | 0) + ',' + ((42 + 11 * k) | 0) + ',' + (0.45 + 0.5 * k).toFixed(3) + ')';
     ctx.lineCap = 'round';
     // solid mode: shafts draw at full strength — the opaque wall pass covers whatever fabric
     // hides, and what remains visible (through the door, through the smoke hole) is real wood
@@ -2402,20 +2410,15 @@
         for (var gsg = 0; gsg < 5; gsg++) {
           var gy0 = HOLE_H * gsg / 5, gy1v = HOLE_H * (gsg + 1) / 5;
           var gr0 = coneR(gy0), gr1 = coneR(gy1v);
-          // fabric goes OPAQUE toward grazing incidence (sightline nearly parallel to the
-          // weave) — face-on stays the light 0.14 veil, but from overhead you cannot see
-          // the poles through the canvas: only the smoke hole is a real window. Incidence
-          // is per SLICE so the falloff runs smoothly up the wall.
+          // fabric solidifies mildly toward grazing incidence (longer path through the
+          // weave) — face-on stays the light 0.14 veil, rims firm up to at most 0.55. The
+          // ghost tent stays SEE-THROUGH from above too: what changes overhead is the pole
+          // treatment (translucent until the camera drops inside), not a fabric blackout.
           var gyM = (gy0 + gy1v) / 2, grM = coneR(gyM);
           var vdx = C[0] - grM * Math.sin(amg), vdy = C[1] - gyM, vdz = C[2] - grM * Math.cos(amg);
           var gfS = Math.sin(amg) * vdx + nY * vdy + Math.cos(amg) * vdz;
           var cosI = gfS / (nrmLen * (Math.hypot(vdx, vdy, vdz) || 1));
-          // the camera's own height matters, not just incidence: once it climbs past the
-          // smoke hole, downward sightlines shouldn't pass through fabric at all — the
-          // opacity ramps to near-solid so the interior only shows through the hole. Below
-          // the rim (side views) the veil stays light with a softly solidifying rim.
-          var aboveF = Math.max(0, Math.min(1, (C[1] - HOLE_H) / 4));
-          var vAlpha = Math.min(0.55 + 0.4 * aboveF, 0.14 / Math.max(0.12, cosI - 0.28 * aboveF));
+          var vAlpha = Math.min(0.55, 0.14 / Math.max(0.26, cosI));
           if (!(proj(gr0 * Math.sin(a1g), gy0, gr0 * Math.cos(a1g), pr) &&
                 proj(gr0 * Math.sin(a2g), gy0, gr0 * Math.cos(a2g), pr2) &&
                 proj(gr1 * Math.sin(a2g), gy1v, gr1 * Math.cos(a2g), pr3) &&
