@@ -690,8 +690,12 @@
       if (sbL > 0) { stkL.style.width = (252 + sbL + GAP) + 'px'; stkL.style.paddingRight = GAP + 'px'; }
       var sbR = stkR.offsetWidth - stkR.clientWidth;
       if (sbR > 0) {
-        stkR.style.width = (252 + sbR + GAP) + 'px'; stkR.style.paddingRight = GAP + 'px';
-        stkR.style.right = Math.max(0, 14 - sbR - GAP) + 'px';
+        // the right side has to fit gap + bar inside the 14px screen margin: split what's
+        // left evenly between card->bar gap and bar->wall margin. Cards stay right-aligned
+        // with the fixed bottom card (right + gap + bar = 14) and the bar never hugs the wall.
+        var availR = Math.max(0, 14 - sbR), gapR = Math.ceil(availR / 2);
+        stkR.style.width = (252 + sbR + gapR) + 'px'; stkR.style.paddingRight = gapR + 'px';
+        stkR.style.right = (availR - gapR) + 'px';
       }
     } else {   // mobile sheet owns layout
       stkL.style.width = ''; stkL.style.paddingRight = '';
