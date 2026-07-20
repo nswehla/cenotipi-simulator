@@ -27,11 +27,14 @@
     color: var(--ink); font-family: var(--ui); font-size: 12.5px;
     scrollbar-width: thin; scrollbar-color: #2e3d3c transparent;
   }
-  #panel h1 {
+  #titleCard {
+    position: fixed; top: 14px; left: 14px; width: 252px; box-sizing: border-box; z-index: 10;
+  }
+  #titleCard h1 {
     font-family: var(--display); font-weight: 400; font-size: 19px;
     letter-spacing: 0.34em; margin: 0; color: var(--ink); text-transform: uppercase;
   }
-  #panel .sub { color: var(--muted); font-size: 11px; margin: 3px 0 0; letter-spacing: 0.02em; }
+  #titleCard .sub { color: var(--muted); font-size: 11px; margin: 3px 0 0; letter-spacing: 0.02em; }
   .grp { margin: 10px 0 0; }
   .grp-label {
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
@@ -354,6 +357,8 @@
     #panelBR { order: 3; }
     #sceneBar { bottom: 56px; }
     #hint { display: none; }
+    /* title card stays on the MAIN screen (it lives outside the sheet); shrink to content */
+    #titleCard { width: auto; }
   }
 </style>
 
@@ -363,13 +368,15 @@
 
 <!-- ctrlWrap: display:contents on desktop (invisible to layout); on mobile it becomes the
      single scrollable controls sheet that the Controls button shows/hides in full -->
+<!-- title card lives OUTSIDE the controls wrap: on mobile it stays on the main screen
+     (the Controls sheet covers it while open); on desktop it heads the left column -->
+<div class="card" id="titleCard">
+  <h1>Cenotipi</h1>
+  <div class="sub">tipi simulator &mdash; Chillits, Sept 2026</div>
+</div>
+
 <div id="ctrlWrap">
 <div id="panel">
-  <div class="card">
-    <h1>Cenotipi</h1>
-    <div class="sub">tipi simulator &mdash; Chillits, Sept 2026</div>
-  </div>
-
   <div class="card">
     <div class="card-hd"><span class="card-title">Vines</span>
       <button type="button" id="shuffle" class="icon-btn" title="Reshuffle vines" aria-label="Reshuffle vines">
@@ -743,9 +750,12 @@
     // stack's scroll area just above its bottom card so every card can scroll fully into view.
     var stkL = document.getElementById('panel'), stkR = document.getElementById('panelR');
     if (innerWidth > 640) {
-      stkL.style.maxHeight = Math.max(120, document.getElementById('panelBL').getBoundingClientRect().top - 26) + 'px';
+      // the left stack starts below the fixed title card (which lives outside the wrap)
+      stkL.style.top = (document.getElementById('titleCard').getBoundingClientRect().bottom + 10) + 'px';
+      stkL.style.maxHeight = Math.max(120, document.getElementById('panelBL').getBoundingClientRect().top -
+                                           stkL.getBoundingClientRect().top - 12) + 'px';
       stkR.style.maxHeight = Math.max(120, document.getElementById('panelBR').getBoundingClientRect().top - 26) + 'px';
-    } else { stkL.style.maxHeight = ''; stkR.style.maxHeight = ''; }   // mobile keeps the CSS vh caps
+    } else { stkL.style.top = ''; stkL.style.maxHeight = ''; stkR.style.maxHeight = ''; }   // mobile keeps the CSS vh caps
     fitScrollGutters();
     computeViewCenter();
     needsDraw = true;
