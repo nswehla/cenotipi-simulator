@@ -2400,6 +2400,10 @@
           ctx.clip('evenodd');   // veil everywhere EXCEPT through the open doorway
         }
       }
+      // hovering over the footprint, the fabric thins out further (nswehla: top-down ghost
+      // views should read MORE transparent) — same camera gate as the pole treatment
+      var vOverF = Math.max(0, Math.min(1, (C[1] - HOLE_H) / 3)) *
+                   Math.max(0, Math.min(1, (R + 4 - Math.hypot(C[0], C[2])) / 4));
       for (i = 0; i < NPOLES; i++) {
         var a1g = i / NPOLES * Math.PI * 2 + 0.12, a2g = (i + 1) / NPOLES * Math.PI * 2 + 0.12;
         var amg = (a1g + a2g) / 2, cyMg = HOLE_H * 0.5, rMgV = coneR(cyMg);
@@ -2418,7 +2422,7 @@
           var vdx = C[0] - grM * Math.sin(amg), vdy = C[1] - gyM, vdz = C[2] - grM * Math.cos(amg);
           var gfS = Math.sin(amg) * vdx + nY * vdy + Math.cos(amg) * vdz;
           var cosI = gfS / (nrmLen * (Math.hypot(vdx, vdy, vdz) || 1));
-          var vAlpha = Math.min(0.55, 0.14 / Math.max(0.26, cosI));
+          var vAlpha = Math.min(0.55, 0.14 / Math.max(0.26, cosI)) * (1 - 0.65 * vOverF);
           if (!(proj(gr0 * Math.sin(a1g), gy0, gr0 * Math.cos(a1g), pr) &&
                 proj(gr0 * Math.sin(a2g), gy0, gr0 * Math.cos(a2g), pr2) &&
                 proj(gr1 * Math.sin(a2g), gy1v, gr1 * Math.cos(a2g), pr3) &&
