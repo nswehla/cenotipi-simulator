@@ -121,6 +121,23 @@
     display: flex; flex-direction: column; gap: 7px;
     scrollbar-width: thin; scrollbar-color: #2e3d3c transparent;
   }
+  /* scroll-edge shadows: sticky gradient bands pinned to the scrollport edges make cut-off
+     cards read as sliding UNDER. Height is neutralised by negative margins (band 14px + the
+     stack's 7px flex gap = 21px), so they occupy no layout space; JS toggles the classes. */
+  #panel::before, #panelR::before {
+    content: ''; position: sticky; top: 0; z-index: 5; flex: none; pointer-events: none;
+    height: 14px; margin-bottom: -21px;
+    background: linear-gradient(to bottom, rgba(4, 12, 14, 0.62), rgba(4, 12, 14, 0));
+    opacity: 0; transition: opacity 0.15s;
+  }
+  #panel::after, #panelR::after {
+    content: ''; position: sticky; bottom: 0; z-index: 5; flex: none; pointer-events: none;
+    height: 14px; margin-top: -21px;
+    background: linear-gradient(to top, rgba(4, 12, 14, 0.62), rgba(4, 12, 14, 0));
+    opacity: 0; transition: opacity 0.15s;
+  }
+  #panel.shadow-top::before, #panelR.shadow-top::before { opacity: 1; }
+  #panel.shadow-bot::after, #panelR.shadow-bot::after { opacity: 1; }
   .card {
     background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px;
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -704,7 +721,19 @@
       stkL.style.width = ''; stkL.style.paddingRight = '';
       stkR.style.width = ''; stkR.style.paddingRight = ''; stkR.style.right = '';
     }
+    updateScrollShadows(stkL); updateScrollShadows(stkR);
   }
+  // cut-off content reads as sliding UNDER: shadow bands appear at whichever scrollport
+  // edges have more content beyond them
+  function updateScrollShadows(el) {
+    var canScroll = innerWidth > 640 && el.scrollHeight > el.clientHeight + 1;
+    el.classList.toggle('shadow-top', canScroll && el.scrollTop > 2);
+    el.classList.toggle('shadow-bot', canScroll && el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+  }
+  ['panel', 'panelR'].forEach(function (sid) {
+    var sel2 = document.getElementById(sid);
+    sel2.addEventListener('scroll', function () { updateScrollShadows(sel2); }, { passive: true });
+  });
   function resize() {
     dpr = Math.min(devicePixelRatio || 1, 1.5);
     Wpx = innerWidth; Hpx = innerHeight;
