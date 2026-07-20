@@ -682,13 +682,21 @@
   // into the screen margin so its cards stay right-aligned with the bottom card.
   function fitScrollGutters() {
     var stkL = document.getElementById('panel'), stkR = document.getElementById('panelR');
+    var GAP = 6;   // breathing room between the cards and the scrollbar (they read as one otherwise)
     if (innerWidth > 640) {
-      stkL.style.width = '252px'; stkR.style.width = '252px'; stkR.style.right = '14px';
+      stkL.style.width = '252px'; stkL.style.paddingRight = '0px';
+      stkR.style.width = '252px'; stkR.style.paddingRight = '0px'; stkR.style.right = '14px';
       var sbL = stkL.offsetWidth - stkL.clientWidth;
-      if (sbL > 0) stkL.style.width = (252 + sbL) + 'px';
+      if (sbL > 0) { stkL.style.width = (252 + sbL + GAP) + 'px'; stkL.style.paddingRight = GAP + 'px'; }
       var sbR = stkR.offsetWidth - stkR.clientWidth;
-      if (sbR > 0) { stkR.style.width = (252 + sbR) + 'px'; stkR.style.right = Math.max(4, 14 - sbR) + 'px'; }
-    } else { stkL.style.width = ''; stkR.style.width = ''; stkR.style.right = ''; }   // mobile sheet owns layout
+      if (sbR > 0) {
+        stkR.style.width = (252 + sbR + GAP) + 'px'; stkR.style.paddingRight = GAP + 'px';
+        stkR.style.right = Math.max(0, 14 - sbR - GAP) + 'px';
+      }
+    } else {   // mobile sheet owns layout
+      stkL.style.width = ''; stkL.style.paddingRight = '';
+      stkR.style.width = ''; stkR.style.paddingRight = ''; stkR.style.right = '';
+    }
   }
   function resize() {
     dpr = Math.min(devicePixelRatio || 1, 1.5);
