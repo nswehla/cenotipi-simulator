@@ -595,27 +595,19 @@
         </g></svg>
       </button>
       <button type="button" class="seg-btn" data-wall="ghost" title="Front half translucent" aria-label="Front half translucent">
-        <!-- door centered like the full icon; it straddles the seam, so each half punches its
-             own portion of the hole (evenodd + clip to that half) -->
+        <!-- artifact-free halves: each is ONE closed path that routes AROUND the door (the
+             door belongs to neither half), so no clips, no evenodd, no seam slivers. Hem
+             control points are the full icon's hem quadratic subdivided at the door edges. -->
         <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor">
-          <defs>
-            <clipPath id="wgA"><path d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z"/></clipPath>
-            <clipPath id="wgB"><path d="M15 4 L16.2 21.2 Q22.8 20.7 27.2 18.4 Z"/></clipPath>
-          </defs>
           <path d="M11.5 1 L15 5.4 M18.5 1 L15 5.4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-          <path clip-path="url(#wgA)" fill-rule="evenodd" d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L17.2 22.6 L12.8 22.6 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
-          <path clip-path="url(#wgB)" fill-rule="evenodd" opacity="0.32" d="M15 4 L16.2 21.2 Q22.8 20.7 27.2 18.4 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L17.2 22.6 L12.8 22.6 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
-          <path d="M15 4 L15.64 13.4" stroke="currentColor" stroke-width="0.8" fill="none" opacity="0.55"/>
+          <path d="M15 4 L2.8 18.4 Q7.8 20.53 12.8 20.9 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
+          <path opacity="0.32" d="M15 4 L27.2 18.4 Q22.2 20.53 17.2 20.9 C17.4 15.2 16.5 13.2 15 13.2 Z"/>
         </g></svg>
       </button>
       <button type="button" class="seg-btn" data-wall="open" title="Front half hidden" aria-label="Front half hidden">
         <svg viewBox="0 0 30 22" aria-hidden="true"><g fill="currentColor">
-          <defs>
-            <clipPath id="woA"><path d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z"/></clipPath>
-          </defs>
           <path d="M11.5 1 L15 5.4 M18.5 1 L15 5.4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-          <path clip-path="url(#woA)" fill-rule="evenodd" d="M15 4 L2.8 18.4 Q8.6 20.9 16.2 21.2 Z M15 13.2 C16.5 13.2 17.4 15.2 17.2 21 L17.2 22.6 L12.8 22.6 L12.8 21 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
-          <path d="M15 4 L15.64 13.4" stroke="currentColor" stroke-width="0.8" fill="none" opacity="0.55"/>
+          <path d="M15 4 L2.8 18.4 Q7.8 20.53 12.8 20.9 C12.6 15.2 13.5 13.2 15 13.2 Z"/>
         </g></svg>
       </button>
     </div>
@@ -1559,6 +1551,13 @@
   }
 
   // ---- per-object draw functions (called in depth-sorted order by drawScene) ----
+  // per-pole wood tone (deterministic): neighbouring poles at the crossing separate
+  // tonally instead of fusing into one flat brown mass — shading, not outlines
+  function poleTone(i) { return 0.8 + 0.4 * hash1(i * 3.71 + 0.17); }
+  function poleRGBA(i, a) {
+    var s = poleTone(i);
+    return 'rgba(' + ((99 * s) | 0) + ',' + ((78 * s) | 0) + ',' + ((53 * s) | 0) + ',' + a + ')';
+  }
   function drawPole(i) {
     var pp = poles[i], nY = (R - HOLE_R) / H;
     var pFacing = Math.sin(pp.a) * (C[0] - pp.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pp.a) * (C[2] - pp.b[2]);
@@ -1569,12 +1568,12 @@
     // (Side views are untouched: the horizontal gate zeroes this out beyond the footprint.)
     var overF = Math.max(0, Math.min(1, (C[1] - HOLE_H) / 3)) *
                 Math.max(0, Math.min(1, (R + 4 - Math.hypot(C[0], C[2])) / 4));
-    var k = pFacing < 0 ? 1 - overF : 0;
-    var pcol = 'rgba(' + ((72 + 27 * k) | 0) + ',' + ((58 + 20 * k) | 0) + ',' + ((42 + 11 * k) | 0) + ',' + (0.45 + 0.5 * k).toFixed(3) + ')';
+    var k = pFacing < 0 ? 1 - overF : 0, ts = poleTone(i);
+    var pcol = 'rgba(' + (((72 + 27 * k) * ts) | 0) + ',' + (((58 + 20 * k) * ts) | 0) + ',' + (((42 + 11 * k) * ts) | 0) + ',' + (0.45 + 0.5 * k).toFixed(3) + ')';
     ctx.lineCap = 'round';
     // solid mode: shafts draw at full strength — the opaque wall pass covers whatever fabric
     // hides, and what remains visible (through the door, through the smoke hole) is real wood
-    if (P.wallSolid) pcol = 'rgba(99,78,53,0.95)';
+    if (P.wallSolid) pcol = poleRGBA(i, 0.95);
     drawPoleShaft(i, pcol);
     // no spike here: spikes are pre-drawn against the sky before everything (see drawScene),
     // so the opaque floor/canvas occludes them from every camera. Solid mode additionally
@@ -1971,7 +1970,7 @@
     // past the silhouette and through the smoke hole. From overhead the floor swallows them
     // (they're interior clutter in a plan view); solid mode repaints the near-side spray
     // after the wall pass since there it's real exterior wood in front of opaque fabric.
-    for (var spk = 0; spk < NPOLES; spk++) drawPoleSpike(spk, 'rgba(99,78,53,0.95)');
+    for (var spk = 0; spk < NPOLES; spk++) drawPoleSpike(spk, poleRGBA(spk, 0.95));
 
     // ground disc — ONLY when the camera is above the floor plane. From underneath the whole
     // floor layer stays hidden, so looking up through it (and through the door/smoke-hole
@@ -2373,7 +2372,7 @@
           }
           if (hok && !hF) {
             ctx.closePath(); ctx.clip();
-            for (i = 0; i < NPOLES; i++) drawPoleShaft(i, 'rgba(99,78,53,0.95)');
+            for (i = 0; i < NPOLES; i++) drawPoleShaft(i, poleRGBA(i, 0.95));
           }
           ctx.restore();
         }
@@ -2475,7 +2474,7 @@
       for (i = 0; i < NPOLES; i++) {
         var pwr = poles[i];
         var pwrF = Math.sin(pwr.a) * (C[0] - pwr.b[0]) + nY * (C[1] - H * 0.5) + Math.cos(pwr.a) * (C[2] - pwr.b[2]);
-        if (pwrF >= 0) drawPoleSpike(i, 'rgba(99,78,53,0.95)');
+        if (pwrF >= 0) drawPoleSpike(i, poleRGBA(i, 0.95));
       }
     }
 
