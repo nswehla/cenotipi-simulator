@@ -682,12 +682,15 @@
   // into the screen margin so its cards stay right-aligned with the bottom card.
   function fitScrollGutters() {
     var stkL = document.getElementById('panel'), stkR = document.getElementById('panelR');
-    var GAP = 6;   // breathing room between the cards and the scrollbar (they read as one otherwise)
     if (innerWidth > 640) {
       stkL.style.width = '252px'; stkL.style.paddingRight = '0px';
       stkR.style.width = '252px'; stkR.style.paddingRight = '0px'; stkR.style.right = '14px';
       var sbL = stkL.offsetWidth - stkL.clientWidth;
-      if (sbL > 0) { stkL.style.width = (252 + sbL + GAP) + 'px'; stkL.style.paddingRight = GAP + 'px'; }
+      if (sbL > 0) {
+        // same card->bar gap as the right stack computes, so the two sides read identically
+        var gapL = Math.ceil(Math.max(0, 14 - sbL) / 2);
+        stkL.style.width = (252 + sbL + gapL) + 'px'; stkL.style.paddingRight = gapL + 'px';
+      }
       var sbR = stkR.offsetWidth - stkR.clientWidth;
       if (sbR > 0) {
         // the right side has to fit gap + bar inside the 14px screen margin: split what's
