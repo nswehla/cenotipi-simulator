@@ -66,6 +66,15 @@
   input[type=range]::-moz-range-thumb {
     width: 13px; height: 13px; border-radius: 50%; background: var(--aqua); border: 0;
   }
+  /* touch screens: fingers need bigger thumbs and a taller hit area than mouse pointers
+     (the day/night handle especially was nearly ungrabbable on phones) */
+  @media (pointer: coarse) {
+    input[type=range] { height: 34px; }
+    input[type=range]::-webkit-slider-runnable-track { height: 5px; }
+    input[type=range]::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -8.5px; }
+    input[type=range]::-moz-range-track { height: 5px; }
+    input[type=range]::-moz-range-thumb { width: 22px; height: 22px; }
+  }
   /* editable numeric readout beside a slider (tipi dimensions) — no native spinners: the
      slider handles coarse adjustment, and Firefox's always-on arrows break the look */
   .row input[type=number].numbox {
