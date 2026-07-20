@@ -676,6 +676,20 @@
     }
     viewCX = (left + right) / 2;
   }
+  // a scrolling stack's scrollbar eats INTO its 252px, squishing the cards narrower than
+  // the fixed bottom cards. Widen the stack by the measured scrollbar width instead, so the
+  // cards keep their full 252px and the bar rides OUTSIDE them; the right stack re-anchors
+  // into the screen margin so its cards stay right-aligned with the bottom card.
+  function fitScrollGutters() {
+    var stkL = document.getElementById('panel'), stkR = document.getElementById('panelR');
+    if (innerWidth > 640) {
+      stkL.style.width = '252px'; stkR.style.width = '252px'; stkR.style.right = '14px';
+      var sbL = stkL.offsetWidth - stkL.clientWidth;
+      if (sbL > 0) stkL.style.width = (252 + sbL) + 'px';
+      var sbR = stkR.offsetWidth - stkR.clientWidth;
+      if (sbR > 0) { stkR.style.width = (252 + sbR) + 'px'; stkR.style.right = Math.max(4, 14 - sbR) + 'px'; }
+    } else { stkL.style.width = ''; stkR.style.width = ''; stkR.style.right = ''; }   // mobile sheet owns layout
+  }
   function resize() {
     dpr = Math.min(devicePixelRatio || 1, 1.5);
     Wpx = innerWidth; Hpx = innerHeight;
@@ -688,6 +702,7 @@
       stkL.style.maxHeight = Math.max(120, document.getElementById('panelBL').getBoundingClientRect().top - 26) + 'px';
       stkR.style.maxHeight = Math.max(120, document.getElementById('panelBR').getBoundingClientRect().top - 26) + 'px';
     } else { stkL.style.maxHeight = ''; stkR.style.maxHeight = ''; }   // mobile keeps the CSS vh caps
+    fitScrollGutters();
     computeViewCenter();
     needsDraw = true;
   }
@@ -1224,6 +1239,7 @@
         sel.style.setProperty('--p', ((sel.value - sel.min) / ((sel.max - sel.min) || 1) * 100) + '%');
       }
     });
+    fitScrollGutters();   // card-stack heights change with mode switches -> re-measure
     needsDraw = true;
   }
 
