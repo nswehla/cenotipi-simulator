@@ -215,8 +215,13 @@
   /* LED pattern buttons */
   .patgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
   .pat {
-    border: 1px solid rgba(126, 147, 142, 0.35); background: none; color: var(--muted);
+    position: relative; border: 1px solid rgba(126, 147, 142, 0.35); background: none; color: var(--muted);
     border-radius: 6px; font: 10.5px var(--ui); padding: 3px 2px; cursor: pointer;
+  }
+  /* amber corner dot marks playlist membership */
+  .pat.inpl::after {
+    content: ''; position: absolute; top: 2px; right: 3px; width: 5px; height: 5px;
+    border-radius: 50%; background: var(--amber);
   }
   .pat:hover { color: var(--ink); border-color: var(--aqua); }
   .pat.on { color: var(--aqua); border-color: rgba(79, 216, 196, 0.6); background: rgba(79, 216, 196, 0.14); }
@@ -239,10 +244,14 @@
   .seg-2 { grid-template-columns: repeat(2, 1fr); }
   .seg-2 .seg-hl { width: calc((100% - 6px) / 2); }
   .seg-txt { font: 11px var(--ui); letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 0; }
-  /* radial-only vs spiral-only rows toggle with the layout mode */
+  /* radial-only vs spiral-only rows toggle with the layout mode; POLES mode shares the
+     spiral family's rows (drops, spiral LEDs) but swaps Main length for density controls */
   .spiral-only { display: none; }
-  body.layout-spiral .spiral-only { display: block; }
-  body.layout-spiral .radial-only { display: none; }
+  body.layout-spiral .spiral-only, body.layout-poles .spiral-only { display: block; }
+  body.layout-spiral .radial-only, body.layout-poles .radial-only { display: none; }
+  .row.poles-only { display: none; }
+  body.layout-poles .row.poles-only { display: flex; }
+  body.layout-poles .row.spiral-solo { display: none; }
 
   /* bottom-right column: Totals + Load Config */
   #panelBR {
@@ -288,7 +297,7 @@
   /* spiral-only toggle labels inside a .toggles grid: hidden in radial, flex when spiral
      (outweighs the .toggles label { display:flex } base rule) */
   .toggles label.spiral-only { display: none; }
-  body.layout-spiral .toggles label.spiral-only { display: flex; }
+  body.layout-spiral .toggles label.spiral-only, body.layout-poles .toggles label.spiral-only { display: flex; }
   #saveArm, #dlArm, #ulBtn {
     height: 30px; border-radius: 6px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
@@ -425,10 +434,11 @@
         </svg>
       </button>
     </div>
-    <div class="seg seg-2" id="layoutSeg">
+    <div class="seg" id="layoutSeg">
       <span class="seg-hl" id="layoutSegHl"></span>
       <button type="button" class="seg-btn seg-txt" data-layout="radial">Random</button>
       <button type="button" class="seg-btn seg-txt" data-layout="spiral">Spiral</button>
+      <button type="button" class="seg-btn seg-txt" data-layout="poles">Poles</button>
     </div>
     <div class="row radial-only"><label for="vineCount">Vertical vines</label><input type="range" id="vineCount" min="0" max="60" value="24"><output for="vineCount">24</output></div>
     <div class="row"><label for="lmin">Min length</label><input type="range" id="lmin" min="2" max="14" value="5" step="0.5"><output for="lmin">5 ft</output></div>
@@ -438,7 +448,17 @@
     <div class="row"><label for="floorGap">Floor gap</label><input type="range" id="floorGap" min="0" max="6" value="1" step="0.25"><output for="floorGap">1 ft</output></div>
     <div class="row radial-only"><label for="fill">Center fill</label><input type="range" id="fill" min="0" max="100" value="45"><output for="fill">45%</output></div>
     <div class="spiral-only">
-      <div class="row"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
+      <div class="row spiral-solo"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
+      <div class="row poles-only"><label for="polyDenB">Density bottom</label><input type="range" id="polyDenB" min="0" max="100" value="70"><output for="polyDenB">70%</output></div>
+      <div class="row poles-only"><label for="polyDenT">Density top</label><input type="range" id="polyDenT" min="0" max="100" value="30"><output for="polyDenT">30%</output></div>
+      <div class="row poles-only"><label for="polyJit">Randomness</label><input type="range" id="polyJit" min="0" max="100" value="35"><output for="polyJit">35%</output>
+        <button type="button" id="polyRoll" class="icon-btn" title="Re-roll the randomness" aria-label="Re-roll the pole wrap randomness">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+      </div>
       <div class="row"><label for="dropCount">Drops</label><input type="range" id="dropCount" min="0" max="40" value="20" step="1"><output for="dropCount">20</output></div>
     </div>
     <div class="togrow">
@@ -538,6 +558,21 @@
     <div class="card-sec">
       <div class="card-hd"><span class="card-title">Pattern</span></div>
       <div class="patgrid" id="patGrid"></div>
+    </div>
+    <div class="card-sec">
+      <div class="card-hd"><span class="card-title">Playlist</span>
+        <div style="display: flex; gap: 5px;">
+          <button type="button" id="plEdit" class="icon-btn" title="Pick playlist patterns — tap patterns in the grid above" aria-label="Edit playlist membership">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M3 13 L3.4 10.4 L10.8 3 L13 5.2 L5.6 12.6 Z M9.6 4.2 L11.8 6.4"/></svg>
+          </button>
+          <button type="button" id="plPlay" class="icon-btn" title="Play / stop the playlist" aria-label="Play or stop the playlist">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path id="plPlayIcon" fill="currentColor" d="M5 3 L13 8 L5 13 Z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="row"><label for="plDwell">Dwell</label><input type="range" id="plDwell" min="3" max="120" step="1" value="20"><output for="plDwell">20 s</output></div>
+      <div class="row"><label for="plFade">Fade</label><input type="range" id="plFade" min="0" max="10" step="0.5" value="2"><output for="plFade">2 s</output></div>
+      <div class="seg-cap" id="plCap">Tap the pencil, then tap patterns to build the list</div>
     </div>
     <div class="card-sec">
       <div class="card-hd">
@@ -918,7 +953,8 @@
     };
   }
   var seed = 7;
-  var matSeed = 11, matPattern = 'medium';   // mats: independent seed + coverage (sparse|medium|full)
+  var matSeed = 11, matPattern = 'medium';
+  var polesSeed = 29;                         // poles-mode randomness stream (re-rolled by its button)   // mats: independent seed + coverage (sparse|medium|full)
   var layout = 'radial';                      // LED/vine rig layout: 'radial' | 'spiral'
   var pattern = 'lagoon';                     // active LED pattern (see PATTERNS)
   var wallMode = 'ghost';                     // front wall: 'solid' | 'ghost' | 'open'
@@ -946,7 +982,7 @@
 
   // ---- params ----
   var P = {};
-  var sliders = ['count', 'lmin', 'lmax', 'hlo', 'hhi', 'floorGap', 'fill', 'bri', 'patSpeed', 'dripSpeed', 'mainLen', 'dropCount', 'vineCount', 'drapedFt', 'tipiH', 'tipiD', 'tipiP', 'dayNight', 'ropeH', 'ropeDrape', 'ropeSp', 'fogLen', 'fogSize', 'fogStr', 'fogBri'];
+  var sliders = ['count', 'lmin', 'lmax', 'hlo', 'hhi', 'floorGap', 'fill', 'bri', 'patSpeed', 'dripSpeed', 'mainLen', 'dropCount', 'polyDenB', 'polyDenT', 'polyJit', 'vineCount', 'drapedFt', 'tipiH', 'tipiD', 'tipiP', 'dayNight', 'ropeH', 'ropeDrape', 'ropeSp', 'fogLen', 'fogSize', 'fogStr', 'fogBri'];
   // pattern speed: slider 0..100 -> exponential multiplier, 50 = 1x, big extremes (0.125x .. 8x)
   function patMulFromSpeed(v) { return Math.pow(8, ((v == null ? 50 : v) - 50) / 50); }
   var toggles = ['ledStrings', 'lightCast', 'drapedLeds', 'spiralLeds', 'vinesDraped', 'vinesOnPoles', 'fog', 'spotOn', 'drips',
@@ -1127,23 +1163,62 @@
     // endpoints onto the backbone itself)
     var drapeSpine = null;   // spiral path, exported by the spiral branch for drape anchoring
 
-    if (layout === 'spiral') {
+    if (layout === 'spiral' || layout === 'poles') {
       // ===== SPIRAL: one long backbone vine wound up the wall, with random-length drops off it.
       // Shares the radial Low/High attach band: starts at Low attach, tops out at High attach.
       // "Main length" = the spiral's total run — more length packs more wraps into the band;
       // "Drops" = EXACTLY how many vertical vines hang off (evenly spread, jittered).
-      var targetLen = P.mainLen;
+      // ===== POLES: same idea, but the backbone attaches AT poles and runs dead straight
+      // pole-to-pole — a polygonal wrap. Attachment density (vertical climb per hop) is a
+      // bottom→top gradient with a seeded randomness contribution; every hop is clamped so
+      // a wrap's chords are never crossed by the (smaller) wrap above it.
       var sLo = Math.min(P.hlo, HOLE_H - 1), sHi = Math.min(P.hhi, HOLE_H - 0.5);
-      var avgCirc = Math.PI * 2 * coneR((sLo + sHi) / 2) * 0.96;
-      var nWraps = Math.max(0.25, targetLen / avgCirc);
-      var risePerWrap = Math.max(0, sHi - sLo) / nWraps;
-      var sa = DOOR_A + 0.4, sy = sLo, sArc = 0, sdA = 0.10, sprev = null, spiralPath = [];
-      while (sArc < targetLen && sy < sHi + 0.01) {
-        var srr = coneR(sy) * 0.96;
-        var spt = [srr * Math.sin(sa), sy, srr * Math.cos(sa)];
-        if (sprev) sArc += Math.hypot(spt[0] - sprev[0], spt[1] - sprev[1], spt[2] - sprev[2]);
-        spiralPath.push(spt); sprev = spt;
-        sa += sdA; sy += risePerWrap * sdA / (Math.PI * 2);
+      var sArc = 0, spiralPath = [];
+      if (layout === 'poles') {
+        var prng = mulberry32(polesSeed);
+        var jit = (P.polyJit == null ? 35 : P.polyJit) / 100;
+        var denB = (P.polyDenB == null ? 70 : P.polyDenB) / 100, denT = (P.polyDenT == null ? 30 : P.polyDenT) / 100;
+        var slopeR = (R - HOLE_R) / H;                 // ft of radius lost per ft of height
+        var cosN = Math.cos(Math.PI / NPOLES);
+        var py = sLo, pIdx = Math.round((DOOR_A + 0.4 - 0.12) / poleStep), att = [], guard2 = 0;
+        while (py <= sHi && guard2++ < 900) {
+          var pa2 = pIdx * poleStep + 0.12;
+          var prr = coneR(py) * 0.985;
+          att.push([prr * Math.sin(pa2), py, prr * Math.cos(pa2)]);
+          var tf = (py - sLo) / Math.max(0.01, sHi - sLo);
+          var den = denB + (denT - denB) * tf;         // density gradient bottom -> top
+          var st3 = 0.05 + Math.pow(1 - den, 1.6) * 1.15;   // dense = tiny climb per hop
+          st3 *= 1 + (prng() * 2 - 1) * 0.9 * jit;     // seeded jitter, dialable
+          // no-overlap clamp: after a full wrap the attach radius must fit inside this
+          // wrap's chord (inradius = R*cos(pi/N)), so each hop must climb at least this
+          var stepMin = coneR(py) * (1 - cosN) / slopeR / NPOLES;
+          py += Math.max(stepMin, st3, 0.01);
+          pIdx++;
+        }
+        for (var ai = 1; ai < att.length; ai++) {
+          if (ai === 1) spiralPath.push(att[0]);
+          var A2 = att[ai - 1], B2 = att[ai];
+          var segL = Math.hypot(B2[0] - A2[0], B2[1] - A2[1], B2[2] - A2[2]);
+          var nseg = Math.max(1, Math.ceil(segL / 0.5));
+          for (var si2 = 1; si2 <= nseg; si2++) {
+            var t3 = si2 / nseg;
+            spiralPath.push([A2[0] + (B2[0] - A2[0]) * t3, A2[1] + (B2[1] - A2[1]) * t3, A2[2] + (B2[2] - A2[2]) * t3]);
+          }
+          sArc += segL;
+        }
+      } else {
+        var targetLen = P.mainLen;
+        var avgCirc = Math.PI * 2 * coneR((sLo + sHi) / 2) * 0.96;
+        var nWraps = Math.max(0.25, targetLen / avgCirc);
+        var risePerWrap = Math.max(0, sHi - sLo) / nWraps;
+        var sa = DOOR_A + 0.4, sy = sLo, sdA = 0.10, sprev = null;
+        while (sArc < targetLen && sy < sHi + 0.01) {
+          var srr = coneR(sy) * 0.96;
+          var spt = [srr * Math.sin(sa), sy, srr * Math.cos(sa)];
+          if (sprev) sArc += Math.hypot(spt[0] - sprev[0], spt[1] - sprev[1], spt[2] - sprev[2]);
+          spiralPath.push(spt); sprev = spt;
+          sa += sdA; sy += risePerWrap * sdA / (Math.PI * 2);
+        }
       }
       vines.push({ pts: spiralPath, leaves: leafify(spiralPath, rnd), kind: 'spiral' });
       drapeSpine = spiralPath;
@@ -1260,7 +1335,7 @@
     var drapedLen = 0, drapedGuard = 0;
     while (drapedLen < drapedTarget - 1 && drapedGuard++ < 240) {
       var p1, p2;
-      if (layout === 'spiral' && drapeSpine && drapeSpine.length > 12) {
+      if ((layout === 'spiral' || layout === 'poles') && drapeSpine && drapeSpine.length > 12) {
         var iA = (rnd() * (drapeSpine.length - 8)) | 0;
         var iB = Math.min(drapeSpine.length - 1, iA + 6 + (((0.04 + rnd() * 0.22) * drapeSpine.length) | 0));
         p1 = drapeSpine[iA]; p2 = drapeSpine[iB];
@@ -1380,7 +1455,7 @@
     document.getElementById('sWMax').innerHTML = Math.round(wMax) + ' <em>W (' + Math.round(wMax / 12) + ' A)</em>';
     document.getElementById('sWCap').innerHTML = Math.round(wMax * 0.3) + ' <em>W (' + Math.round(wMax * 0.3 / 12) + ' A)</em>';
     // slider outputs
-    var units = { count: '', lmin: ' ft', lmax: ' ft', hlo: ' ft', hhi: ' ft', floorGap: ' ft', fill: '%', bri: '%', patSpeed: '', dripSpeed: '', mainLen: ' ft', dropCount: '', vineCount: '', tipiH: ' ft', tipiD: ' ft', tipiP: '', dayNight: '%', ropeH: ' ft', ropeDrape: ' ft', ropeSp: ' in', fogLen: ' ft', fogSize: ' in', fogStr: '%', fogBri: '%' };
+    var units = { count: '', lmin: ' ft', lmax: ' ft', hlo: ' ft', hhi: ' ft', floorGap: ' ft', fill: '%', bri: '%', patSpeed: '', dripSpeed: '', mainLen: ' ft', dropCount: '', polyDenB: '%', polyDenT: '%', polyJit: '%', vineCount: '', tipiH: ' ft', tipiD: ' ft', tipiP: '', dayNight: '%', ropeH: ' ft', ropeDrape: ' ft', ropeSp: ' in', fogLen: ' ft', fogSize: ' in', fogStr: '%', fogBri: '%' };
     sliders.forEach(function (id) {
       var out = document.querySelector('output[for=' + id + ']');
       if (!out) {
@@ -1701,7 +1776,7 @@
       for (i = 0; i < vines.length; i++) {
         if (vines[i].kind === 'spiral') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 4);
       }
-    } else if (id === 'dropCount' && layout === 'spiral') {
+    } else if (id === 'dropCount' && (layout === 'spiral' || layout === 'poles')) {
       for (i = 0; i < vines.length; i++) {
         if (vines[i].kind === 'drop') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 3);
       }
@@ -2028,8 +2103,35 @@
     var briF = P.bri / 100 * (1 + 0.35 * (1 - dayF));
     var patmul = patMulFromSpeed(P.patSpeed);
     var patT = time * patmul;
+    // playlist: advance to the next member when the dwell elapses, then crossfade — during
+    // the fade EVERY pattern evaluation blends the outgoing pattern into the incoming one,
+    // so strings, rope bays, floor pools, and wall washes all transition together
+    if (plOn && pl.members.length) {
+      if (time >= plNextAt) {
+        plPrev = pattern;
+        plIdx = (plIdx + 1) % pl.members.length;
+        pattern = pl.members[plIdx];
+        updatePatUI();
+        plFadeStart = time;
+        plNextAt = time + pl.dwell;
+      }
+    }
     var patFn = PATTERNS[pattern] || PATTERNS.lagoon;
-    var rgbv = [0, 0, 0];
+    var plMix = 0, patFnB = null;
+    if (plPrev && pl.fade > 0 && time - plFadeStart < pl.fade) {
+      plMix = 1 - (time - plFadeStart) / pl.fade;
+      patFnB = PATTERNS[plPrev] || null;
+    }
+    var rgbv = [0, 0, 0], rgbv2 = [0, 0, 0];
+    function evalPat(u, i2, s2, st2, x, y, z, tt, out) {
+      patFn(u, i2, s2, st2, x, y, z, tt, out);
+      if (patFnB && plMix > 0) {
+        patFnB(u, i2, s2, st2, x, y, z, tt, rgbv2);
+        out[0] += (rgbv2[0] - out[0]) * plMix;
+        out[1] += (rgbv2[1] - out[1]) * plMix;
+        out[2] += (rgbv2[2] - out[2]) * plMix;
+      }
+    }
     // pre-sample each lit string's average pattern colour: the light cast is painted INTO the
     // floor and wall surfaces below (never composited over the scene as floating glow)
     var casts = null;
@@ -2042,7 +2144,7 @@
         var car = 0, cag = 0, cab = 0;
         for (var tap = 0; tap < 3; tap++) {
           var kk = Math.min(cst.n - 1, ((cst.n - 1) * (0.2 + 0.3 * tap)) | 0);
-          patFn(cst.n > 1 ? kk / (cst.n - 1) : 0, kk, ci2, cst, cst.pts[kk * 3], cst.pts[kk * 3 + 1], cst.pts[kk * 3 + 2], patT, rgbv);
+          evalPat(cst.n > 1 ? kk / (cst.n - 1) : 0, kk, ci2, cst, cst.pts[kk * 3], cst.pts[kk * 3 + 1], cst.pts[kk * 3 + 2], patT, rgbv);
           car += rgbv[0]; cag += rgbv[1]; cab += rgbv[2];
         }
         car /= 3; cag /= 3; cab /= 3;
@@ -2085,7 +2187,7 @@
           var eSt2 = { hue: 168, phase: eb2 * 0.7 };
           var esr = 0, esg = 0, esb = 0;
           for (var etp = 0; etp < 3; etp++) {
-            patFn((eb2 + (etp + 0.5) / 3) / NPOLES, eb2 * 7 + etp * 3, 900 + eb2, eSt2,
+            evalPat((eb2 + (etp + 0.5) / 3) / NPOLES, eb2 * 7 + etp * 3, 900 + eb2, eSt2,
                   ropeP.rm * Math.sin(ebA), ropeP.hm, ropeP.rm * Math.cos(ebA), patT, rgbv);
             esr += rgbv[0]; esg += rgbv[1]; esb += rgbv[2];
           }
@@ -2390,7 +2492,7 @@
                                       : Math.max(1.5, pr[2] * 0.021);  // ~1/2 in rope light
           if (edgeMode === 'led') {
             // pebble LED string around the edge, driven by the active pattern
-            patFn((bay + rt) / NPOLES, di, 900 + bay, edgeSt, ewx, ry, ewz, patT, rgbv);
+            evalPat((bay + rt) / NPOLES, di, 900 + bay, edgeSt, ewx, ry, ewz, patT, rgbv);
             ctx.fillStyle = 'rgb(' + ((rgbv[0] * 255 * briF) | 0) + ',' + ((rgbv[1] * 255 * briF) | 0) + ',' + ((rgbv[2] * 255 * briF) | 0) + ')';
           } else {
             var tw = 0.65 + 0.25 * Math.sin(time * 1.3 + di * 1.7);
@@ -2417,7 +2519,7 @@
           ctx.fillStyle = dripCol;
           sz *= 1.5;
         } else {
-          patFn(k * tInv, k, si, st, wx, wy, wz, patT, rgbv);
+          evalPat(k * tInv, k, si, st, wx, wy, wz, patT, rgbv);
           ctx.fillStyle = 'rgb(' + ((rgbv[0] * 255 * briF) | 0) + ',' + ((rgbv[1] * 255 * briF) | 0) + ',' + ((rgbv[2] * 255 * briF) | 0) + ')';
         }
         ctx.fillRect(pr[0] - sz / 2, pr[1] - sz / 2, sz, sz);
@@ -3030,6 +3132,11 @@
       regen();
     });
   });
+  document.getElementById('polyRoll').addEventListener('click', function () {
+    // poles-mode randomness re-roll: own seed stream, never touches the vine/string seed
+    polesSeed = (polesSeed * 16807 + 13) % 2147483647;
+    regen();
+  });
   document.getElementById('shuffle').addEventListener('click', function () {
     // vines/strings only — mats re-shuffle by tapping the active coverage icon
     seed = (seed * 16807 + 13) % 2147483647;
@@ -3059,12 +3166,13 @@
   // layout selector: Radial <-> Spiral (rewires the whole LED + vine generation)
   var layoutSegHl = document.getElementById('layoutSegHl');
   var layoutBtns = Array.prototype.slice.call(document.querySelectorAll('#layoutSeg .seg-btn'));
-  var LAYOUT_ORDER = ['radial', 'spiral'];
+  var LAYOUT_ORDER = ['radial', 'spiral', 'poles'];
   function updateLayoutSeg() {
     var idx = LAYOUT_ORDER.indexOf(layout); if (idx < 0) idx = 0;
     layoutSegHl.style.transform = 'translateX(' + (idx * 100) + '%)';
     layoutBtns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-layout') === layout); });
     document.body.classList.toggle('layout-spiral', layout === 'spiral');
+    document.body.classList.toggle('layout-poles', layout === 'poles');
   }
   layoutBtns.forEach(function (b) {
     b.addEventListener('click', function () { layout = b.getAttribute('data-layout'); updateLayoutSeg(); regen(); });
@@ -3099,17 +3207,81 @@
   });
   updateEdgeSeg();
 
-  // LED pattern buttons — the active one highlights and plays
+  // ---- playlist: rotates chosen patterns with crossfades. Deliberately INDEPENDENT of the
+  // config save system (nswehla 2026-08-26): it persists under its own localStorage key,
+  // and loading a tipi config never touches the running rotation.
+  var PL_KEY = 'cenotipi-playlist-v1';
+  var pl = { members: [], dwell: 20, fade: 2 };
+  try {
+    var plStored = JSON.parse(localStorage.getItem(PL_KEY) || 'null');
+    if (plStored && Array.isArray(plStored.members)) {
+      pl.members = plStored.members.filter(function (p) { return PATTERNS[p]; });
+      if (plStored.dwell > 0) pl.dwell = plStored.dwell;
+      if (plStored.fade >= 0) pl.fade = plStored.fade;
+    }
+  } catch (e) {}
+  var plOn = false, plEditing = false, plIdx = 0, plNextAt = 0, plPrev = null, plFadeStart = -1e9;
+  var plEditBtn = document.getElementById('plEdit'), plPlayBtn = document.getElementById('plPlay');
+  var plCapEl = document.getElementById('plCap');
+  var plDwellEl = document.getElementById('plDwell'), plFadeEl = document.getElementById('plFade');
+  function plPersist() { try { localStorage.setItem(PL_KEY, JSON.stringify(pl)); } catch (e) {} }
+  function plSlider(el, key) {
+    el.value = pl[key];
+    var out = document.querySelector('output[for=' + el.id + ']');
+    function sync() {
+      out.textContent = pl[key] + ' s';
+      el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
+    }
+    el.addEventListener('input', function () { pl[key] = +el.value; sync(); plPersist(); needsDraw = true; });
+    sync();
+  }
+  plSlider(plDwellEl, 'dwell'); plSlider(plFadeEl, 'fade');
+  function plUI() {
+    plEditBtn.classList.toggle('armed', plEditing);
+    plPlayBtn.classList.toggle('armed', plOn);
+    document.getElementById('plPlayIcon').setAttribute('d', plOn ? 'M4 4 h8 v8 h-8 Z' : 'M5 3 L13 8 L5 13 Z');
+    plCapEl.textContent = plEditing ? 'Tap patterns above to add / remove them'
+      : !pl.members.length ? 'Tap the pencil, then tap patterns to build the list'
+      : pl.members.length + ' pattern' + (pl.members.length > 1 ? 's' : '') + (plOn ? ' — playing' : ' — stopped');
+    updatePatUI();
+  }
+  plEditBtn.addEventListener('click', function () { plEditing = !plEditing; plUI(); });
+  plPlayBtn.addEventListener('click', function () {
+    if (plOn) { plOn = false; }
+    else {
+      if (!pl.members.length) { plCapEl.textContent = 'Playlist is empty — tap the pencil first'; return; }
+      plOn = true;
+      plIdx = Math.max(0, pl.members.indexOf(pattern));
+      if (pl.members.indexOf(pattern) < 0) {
+        plPrev = pattern; pattern = pl.members[0]; plIdx = 0; plFadeStart = simT; updatePatUI();
+      }
+      plNextAt = simT + pl.dwell;
+    }
+    needsDraw = true; plUI();
+  });
+
+  // LED pattern buttons — the active one highlights and plays. In playlist-edit mode a tap
+  // toggles membership instead; a tap during playback also restarts that pattern's dwell.
   var patGrid = document.getElementById('patGrid');
   PAT_LIST.forEach(function (p) {
     var b = document.createElement('button');
     b.type = 'button'; b.className = 'pat'; b.textContent = p[1]; b.setAttribute('data-pat', p[0]);
-    b.addEventListener('click', function () { pattern = p[0]; updatePatUI(); needsDraw = true; });
+    b.addEventListener('click', function () {
+      if (plEditing) {
+        var mi2 = pl.members.indexOf(p[0]);
+        if (mi2 >= 0) pl.members.splice(mi2, 1); else pl.members.push(p[0]);
+        plPersist(); plUI();
+        return;
+      }
+      if (plOn) { plIdx = Math.max(0, pl.members.indexOf(p[0])); plNextAt = simT + pl.dwell; plPrev = pattern; plFadeStart = simT; }
+      pattern = p[0]; updatePatUI(); needsDraw = true;
+    });
     patGrid.appendChild(b);
   });
   function updatePatUI() {
     Array.prototype.forEach.call(patGrid.children, function (b) {
       b.classList.toggle('on', b.getAttribute('data-pat') === pattern);
+      b.classList.toggle('inpl', pl.members.indexOf(b.getAttribute('data-pat')) >= 0);
     });
   }
   updatePatUI();
@@ -3227,7 +3399,7 @@
 
   function snapshotState() {
     var s = { sliders: {}, toggles: {}, fogColor: document.getElementById('fogColor').value,
-              layout: layout, matPattern: matPattern, matSeed: matSeed, seed: seed, pattern: pattern, wallMode: wallMode,
+              layout: layout, matPattern: matPattern, matSeed: matSeed, seed: seed, polesSeed: polesSeed, pattern: pattern, wallMode: wallMode,
               dripHue: dripHue, dripSat: dripSat, edgeMode: edgeMode,
               cam: { az: cam.az, el: cam.el, dist: cam.dist } };
     sliders.forEach(function (id) { s.sliders[id] = document.getElementById(id).value; });
@@ -3251,6 +3423,7 @@
     matPattern = s.matPattern || 'medium';
     if (s.matSeed != null) matSeed = s.matSeed;
     if (s.seed != null) seed = s.seed;
+    if (s.polesSeed != null) polesSeed = s.polesSeed;
     if (s.pattern && PATTERNS[s.pattern]) { pattern = s.pattern; updatePatUI(); }
     wallMode = s.wallMode || (s.toggles && s.toggles.hideFront ? 'open' : 'ghost');   // legacy hideFront maps to open
     updateWallSeg();
@@ -3395,13 +3568,13 @@
     }
     // hanging strings: sorted longest-first; the first N carry LEDs (that IS the assignment
     // rule), so pairing the sorted vines with the sorted strings labels each bar correctly
-    var hang = (layout === 'spiral' ? drops : verts).slice().sort(function (a, b) { return b - a; });
-    var hangLed = (layout === 'spiral' ? ledDrop : ledVert).slice().sort(function (a, b) { return b.L - a.L; });
+    var hang = (layout === 'radial' ? verts : drops).slice().sort(function (a, b) { return b - a; });
+    var hangLed = (layout === 'radial' ? ledVert : ledDrop).slice().sort(function (a, b) { return b.L - a.L; });
     var hangFt = hang.reduce(function (a, b) { return a + b; }, 0);
     var hangPx = hangLed.reduce(function (a, s) { return a + s.n; }, 0);
 
-    if (layout === 'spiral') {
-      h += '<div class="bd-sec"><div class="bd-h">Spiral</div>';
+    if (layout !== 'radial') {
+      h += '<div class="bd-sec"><div class="bd-h">' + (layout === 'poles' ? 'Pole wrap' : 'Spiral') + '</div>';
       var spMax = Math.max(spiralFt, ringFt);
       if (spiralFt) bar(spiralFt, spMax, !!bbLed, bbLed ? bbLed.n : 0);
       if (ringFt) bar(ringFt, spMax, !!ringLed2, ringLed2 ? ringLed2.n : 0);
@@ -3412,7 +3585,7 @@
       h += '</div>';
     }
 
-    h += '<div class="bd-sec"><div class="bd-h">' + (layout === 'spiral' ? 'Drops' : 'Vertical vines') +
+    h += '<div class="bd-sec"><div class="bd-h">' + (layout === 'radial' ? 'Vertical vines' : 'Drops') +
          ' &mdash; ' + hang.length + ' &middot; ' + bdFt(hangFt) + ' ft &middot; ' +
          hangLed.length + ' with LEDs (' + hangPx + ' px)</div>';
     var hangMax = hang[0] || 1;
