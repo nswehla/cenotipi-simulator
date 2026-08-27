@@ -422,6 +422,9 @@
       <span class="unit">ft</span>
     </div>
     <div class="togrow">
+      <label title="Full circle of vine at the top attach height (the helix's top wrap in spiral mode)"><input type="checkbox" id="topRing"> Top ring</label>
+    </div>
+    <div class="togrow">
       <label><input type="checkbox" id="vinesOnPoles" checked> Restrict mounting to poles</label>
     </div>
   </div>
@@ -618,7 +621,6 @@
       </div>
       <span class="unit"></span>
     </div>
-    <label class="hf" title="Rig hub hoop suspended under the smoke hole"><input type="checkbox" id="topRing"> Top ring</label>
     <div class="grp-label" style="margin: 7px 0 3px;">Visibility</div>
     <div class="seg" id="wallSeg">
       <span class="seg-hl" id="wallSegHl"></span>
@@ -1175,6 +1177,23 @@
         totalPx += ln;
         strings.push({ pts: lpts, n: ln, hue: 168 + rnd() * 38, phase: lv.phase, drip: -1, nextDrip: 1 + rnd() * 8, L: lv.len, anchor: lv.anchor, role: 'radial' });
       }
+    }
+
+    // top ring: a full circle of VINE hugging the wall at the top attach height — in spiral
+    // mode that's the helix's top wrap closed into a loop. Own RNG stream (like drapedLeds)
+    // so toggling it never reshuffles the rest of the scene; sine-harmonic wobble keeps it
+    // organic while closing seamlessly at 2π.
+    if (P.topRing) {
+      var trng = mulberry32(seed ^ 0x9e3779);
+      var ringY0 = Math.min(P.hhi, HOLE_H - 0.5), rgPhase = trng() * Math.PI * 2;
+      var ringPts = [];
+      for (var rgi = 0; rgi <= 72; rgi++) {
+        var rga = rgi / 72 * Math.PI * 2;
+        var rgy = ringY0 + Math.sin(rga * 3 + rgPhase) * 0.14;
+        var rgr = coneR(rgy) * (0.96 + Math.sin(rga * 5 + rgPhase * 1.7) * 0.006);
+        ringPts.push([rgr * Math.sin(rga), rgy, rgr * Math.cos(rga)]);
+      }
+      vines.push({ pts: ringPts, leaves: leafify(ringPts, trng), kind: 'ring' });
     }
 
     // draped garland vines — generated until the requested total footage is strung.
@@ -2379,7 +2398,6 @@
     if (P.fog && fogP.length) solids.push([cdepth(0, HOLE_H - (P.fogLen || 6) * 0.5, 0), 5, 0]);
     if (P.fog) solids.push([cdepth(0.55, 0.6, 0.35), 8, 0]);   // the physical spotlight fixture
     if (P.fog) solids.push([cdepth(0, HOLE_H - FOG_TOP * 0.5, 0), 9, 0]);   // the emitter can
-    if (P.topRing) solids.push([cdepth(0, HOLE_H - 2, 0), 10, 0]);          // rig hub hoop
     if (ropeP) for (i = 0; i < NPOLES; i++) {
       var rma = i * ropeP.rstep + 0.12 + ropeP.rstep / 2;
       solids.push([cdepth(ropeP.rm * Math.sin(rma), ropeP.hm, ropeP.rm * Math.cos(rma)), 6, i]);
@@ -2401,8 +2419,7 @@
       else if (kind === 6) drawRopeBay(idx);
       else if (kind === 7) drawLedString(idx);
       else if (kind === 8) drawSpotlight();
-      else if (kind === 9) drawFogEmitter();
-      else drawTopRing();
+      else drawFogEmitter();
     }
 
     // fog emitter: a short ~8in can hung at the smoke hole; fog spills from its base.
@@ -2428,32 +2445,6 @@
         ctx.beginPath(); ctx.moveTo(eTop[0][0], eTop[0][1]);   // top rim highlight
         for (var ee = 1; ee <= eN; ee++) ctx.lineTo(eTop[ee][0], eTop[ee][1]);
         ctx.closePath(); ctx.strokeStyle = 'rgba(150,162,156,0.4)'; ctx.lineWidth = 1; ctx.stroke();
-      }
-    }
-
-    // top ring: the rig-hub hoop suspended under the smoke hole on the halyard
-    // (architecture/rigging.md scheme). Depth-sorted (kind 10); toggled in the Tipi card.
-    function drawTopRing() {
-      var ry = HOLE_H - 2, rr2 = 2, segs = 36;
-      if (!proj(0, ry, 0, pr3)) return;
-      var rcs = pr3[2];   // projected scale at the ring centre — depth reference
-      if (proj(0, HOLE_H - 0.1, 0, pr) && proj(0, ry, 0, pr2)) {   // halyard drop line
-        ctx.strokeStyle = 'rgba(205,195,170,0.55)';
-        ctx.lineWidth = Math.max(0.75, rcs * 0.012);
-        ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
-      }
-      ctx.lineCap = 'round';
-      for (var rgI = 0; rgI < segs; rgI++) {
-        var ra0 = rgI / segs * Math.PI * 2, ra1 = (rgI + 1) / segs * Math.PI * 2;
-        if (proj(rr2 * Math.sin(ra0), ry, rr2 * Math.cos(ra0), pr) &&
-            proj(rr2 * Math.sin(ra1), ry, rr2 * Math.cos(ra1), pr2)) {
-          // nearer segments brighter + thicker — a cheap roundness cue on the hoop
-          var nearF = Math.max(0, Math.min(1, ((pr[2] + pr2[2]) / 2 / rcs - 1) * 4 + 0.5));
-          var rl = (108 + 62 * nearF) | 0;
-          ctx.strokeStyle = 'rgb(' + rl + ',' + (rl + 4) + ',' + (rl + 8) + ')';
-          ctx.lineWidth = Math.max(1, (pr[2] + pr2[2]) / 2 * 0.05 * (0.75 + 0.5 * nearF));
-          ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
-        }
       }
     }
 
