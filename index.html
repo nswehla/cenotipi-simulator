@@ -566,7 +566,11 @@
   <div class="card">
     <div class="card-hd">
       <span class="card-title">Load Config</span>
+      <button type="button" id="ulBtn" class="icon-btn" title="Load a downloaded config file" aria-label="Load a config from a downloaded file">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M8 9.2 V2 M4.6 5.4 L8 2 L11.4 5.4 M2.5 12.8 h11"/></svg>
+      </button>
     </div>
+    <input type="file" id="cfgFile" accept=".txt,.json,application/json,text/plain" hidden>
     <div class="slots" id="saveSlots">
       <button id="saveArm" type="button" title="Save — then pick a slot" aria-label="Save — then pick a slot">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M2.5 1h8.9L15 4.6v8.9A1.5 1.5 0 0 1 13.5 15h-11A1.5 1.5 0 0 1 1 13.5v-11A1.5 1.5 0 0 1 2.5 1Zm2 1.2h6.5V6H4.5V2.2Zm4.2.8h1.5v2.2H8.7V3ZM3.6 9.6h8.8v4.3H3.6V9.6Z"/></svg>
@@ -3235,6 +3239,33 @@
   }
   saveArmBtn.addEventListener('click', function () { saveArmed = !saveArmed; dlArmed = false; updateSaveUI(); });
   dlArmBtn.addEventListener('click', function () { dlArmed = !dlArmed; saveArmed = false; updateSaveUI(); });
+  // load-from-file: the reverse trip of the download button. Accepts both the wrapped
+  // download payload and a bare config object, applies it live (confirm-guarded when there
+  // are unsaved tweaks) — save it into a slot afterwards if it should stick around.
+  var ulBtn = document.getElementById('ulBtn'), cfgFile = document.getElementById('cfgFile');
+  ulBtn.addEventListener('click', function () { saveArmed = dlArmed = false; updateSaveUI(); cfgFile.click(); });
+  cfgFile.addEventListener('change', function () {
+    var f = cfgFile.files && cfgFile.files[0];
+    cfgFile.value = '';   // allow re-picking the same file later
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      var cfg = null;
+      try {
+        var parsed = JSON.parse(rd.result);
+        cfg = parsed && parsed.config && parsed.config.sliders ? parsed.config
+            : parsed && parsed.sliders ? parsed : null;
+      } catch (e) {}
+      if (!cfg) { capMsg("Couldn't read that file — not a Cenotipi config"); return; }
+      if (lookSig() === cleanState) {
+        applyState(cfg); capMsg('Loaded config from file');
+      } else {
+        showConfirm('Load "' + f.name + '"? Unsaved changes will be lost.',
+                    function () { applyState(cfg); capMsg('Loaded config from file'); });
+      }
+    };
+    rd.readAsText(f);
+  });
   function downloadSave(i) {
     var payload = { app: 'cenotipi-mockup', slot: i + 1, savedAt: new Date().toISOString(), config: saves[i] };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'text/plain' });
