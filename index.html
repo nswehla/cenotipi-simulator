@@ -1194,6 +1194,14 @@
         ringPts.push([rgr * Math.sin(rga), rgy, rgr * Math.cos(rga)]);
       }
       vines.push({ pts: ringPts, leaves: leafify(ringPts, trng), kind: 'ring' });
+      // LEDs along the ring — role 'spiral' so they follow the Spiral LEDs toggle exactly
+      // like the backbone (and share its no-drip behaviour + pattern gating)
+      var ringLed = resampleToPitch(ringPts);
+      if (ringLed.length >= 6) {
+        var rn2 = ringLed.length / 3; totalPx += rn2;
+        strings.push({ pts: ringLed, n: rn2, hue: 150, phase: 0, drip: -1, nextDrip: 1e9,
+                       L: rn2 * PITCH, anchor: ringPts[0], role: 'spiral' });
+      }
     }
 
     // draped garland vines — generated until the requested total footage is strung.
