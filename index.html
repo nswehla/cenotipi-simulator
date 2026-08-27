@@ -409,7 +409,7 @@
     <div class="row radial-only"><label for="fill">Center fill</label><input type="range" id="fill" min="0" max="100" value="45"><output for="fill">45%</output></div>
     <div class="spiral-only">
       <div class="row"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
-      <div class="row"><label for="dropDensity">Drop density</label><input type="range" id="dropDensity" min="0" max="100" value="50"><output for="dropDensity">50%</output></div>
+      <div class="row"><label for="dropCount">Drops</label><input type="range" id="dropCount" min="0" max="40" value="20" step="1"><output for="dropCount">20</output></div>
     </div>
     <div class="togrow">
       <label><input type="checkbox" id="vinesDraped" checked> Draped vines</label>
@@ -618,6 +618,7 @@
       </div>
       <span class="unit"></span>
     </div>
+    <label class="hf" title="Rig hub hoop suspended under the smoke hole"><input type="checkbox" id="topRing"> Top ring</label>
     <div class="grp-label" style="margin: 7px 0 3px;">Visibility</div>
     <div class="seg" id="wallSeg">
       <span class="seg-hl" id="wallSegHl"></span>
@@ -895,11 +896,11 @@
 
   // ---- params ----
   var P = {};
-  var sliders = ['count', 'lmin', 'lmax', 'hlo', 'hhi', 'floorGap', 'fill', 'bri', 'patSpeed', 'dripSpeed', 'mainLen', 'dropDensity', 'vineCount', 'drapedFt', 'tipiH', 'tipiD', 'tipiP', 'dayNight', 'ropeH', 'ropeDrape', 'ropeSp', 'fogLen', 'fogSize', 'fogStr', 'fogBri'];
+  var sliders = ['count', 'lmin', 'lmax', 'hlo', 'hhi', 'floorGap', 'fill', 'bri', 'patSpeed', 'dripSpeed', 'mainLen', 'dropCount', 'vineCount', 'drapedFt', 'tipiH', 'tipiD', 'tipiP', 'dayNight', 'ropeH', 'ropeDrape', 'ropeSp', 'fogLen', 'fogSize', 'fogStr', 'fogBri'];
   // pattern speed: slider 0..100 -> exponential multiplier, 50 = 1x, big extremes (0.125x .. 8x)
   function patMulFromSpeed(v) { return Math.pow(8, ((v == null ? 50 : v) - 50) / 50); }
   var toggles = ['ledStrings', 'lightCast', 'drapedLeds', 'spiralLeds', 'vinesDraped', 'vinesOnPoles', 'fog', 'spotOn', 'drips',
-                 'matsOn',
+                 'matsOn', 'topRing',
                  'p62', 'p510', 'p54', 'pKid', 'pTod', 'banana'];
   function readParams() {
     sliders.forEach(function (id) { P[id] = +document.getElementById(id).value; });
@@ -1121,7 +1122,7 @@
       // ===== SPIRAL: one long backbone vine wound up the wall, with random-length drops off it.
       // Shares the radial Low/High attach band: starts at Low attach, tops out at High attach.
       // "Main length" = the spiral's total run — more length packs more wraps into the band;
-      // "Drop density" = how many vertical vines hang off.
+      // "Drops" = EXACTLY how many vertical vines hang off (evenly spread, jittered).
       var targetLen = P.mainLen;
       var sLo = Math.min(P.hlo, HOLE_H - 1), sHi = Math.min(P.hhi, HOLE_H - 0.5);
       var avgCirc = Math.PI * 2 * coneR((sLo + sHi) / 2) * 0.96;
@@ -1141,15 +1142,18 @@
         var sn = spiralLed.length / 3; totalPx += sn;
         strings.push({ pts: spiralLed, n: sn, hue: 150, phase: 0, drip: -1, nextDrip: 1e9, L: sArc, anchor: spiralPath[0], role: 'spiral' });
       }
-      var dens = (P.dropDensity == null ? 50 : P.dropDensity) / 100;
-      var dropSpacing = 8 - 6.4 * dens;   // ft between drops: ~8 (sparse) .. ~1.6 (dense)
-      var walk = 0, nextDrop = dropSpacing * (0.5 + rnd() * 0.5), wprev = spiralPath[0] || [0, 0, 0];
+      // exactly N drops: evenly spaced arc targets along the backbone, each jittered within
+      // its slot so the spacing reads organic rather than metronomic
+      var nDrops = Math.round(P.dropCount == null ? 20 : P.dropCount);
+      var dropTargets = [];
+      for (var dt2 = 0; dt2 < nDrops; dt2++) dropTargets.push(sArc * (dt2 + 0.25 + rnd() * 0.5) / Math.max(1, nDrops));
+      var walk = 0, dti = 0, wprev = spiralPath[0] || [0, 0, 0];
       var dropVines = [];
-      for (var wi = 1; wi < spiralPath.length; wi++) {
+      for (var wi = 1; wi < spiralPath.length && dti < dropTargets.length; wi++) {
         var wp = spiralPath[wi];
         walk += Math.hypot(wp[0] - wprev[0], wp[1] - wprev[1], wp[2] - wprev[2]); wprev = wp;
-        if (walk >= nextDrop) {
-          nextDrop = walk + dropSpacing * (0.7 + rnd() * 0.6);
+        if (walk >= dropTargets[dti]) {
+          dti++;
           var dyTop = wp[1];
           var dLen = Math.min(P.lmin + (P.lmax - P.lmin) * rnd(), Math.max(PITCH, dyTop - floorG));
           var dphase = rnd() * Math.PI * 2, dsw = 0.1 + rnd() * 0.08;
@@ -1284,7 +1288,7 @@
     document.getElementById('sWMax').innerHTML = Math.round(wMax) + ' <em>W (' + Math.round(wMax / 12) + ' A)</em>';
     document.getElementById('sWCap').innerHTML = Math.round(wMax * 0.3) + ' <em>W (' + Math.round(wMax * 0.3 / 12) + ' A)</em>';
     // slider outputs
-    var units = { count: '', lmin: ' ft', lmax: ' ft', hlo: ' ft', hhi: ' ft', floorGap: ' ft', fill: '%', bri: '%', patSpeed: '', dripSpeed: '', mainLen: ' ft', dropDensity: '%', vineCount: '', tipiH: ' ft', tipiD: ' ft', tipiP: '', dayNight: '%', ropeH: ' ft', ropeDrape: ' ft', ropeSp: ' in', fogLen: ' ft', fogSize: ' in', fogStr: '%', fogBri: '%' };
+    var units = { count: '', lmin: ' ft', lmax: ' ft', hlo: ' ft', hhi: ' ft', floorGap: ' ft', fill: '%', bri: '%', patSpeed: '', dripSpeed: '', mainLen: ' ft', dropCount: '', vineCount: '', tipiH: ' ft', tipiD: ' ft', tipiP: '', dayNight: '%', ropeH: ' ft', ropeDrape: ' ft', ropeSp: ' in', fogLen: ' ft', fogSize: ' in', fogStr: '%', fogBri: '%' };
     sliders.forEach(function (id) {
       var out = document.querySelector('output[for=' + id + ']');
       if (!out) {
@@ -1372,7 +1376,7 @@
   function depthAlpha(scale) { return Math.max(0.25, Math.min(1, scale / (focal / 40))); }
 
   // ---- slider measurement guides: overlays drawn while a slider is adjusted, then fade out ----
-  var GUIDE_IDS = { hlo: 1, hhi: 1, floorGap: 1, mainLen: 1, dropDensity: 1, lmin: 1, lmax: 1 };
+  var GUIDE_IDS = { hlo: 1, hhi: 1, floorGap: 1, mainLen: 1, dropCount: 1, lmin: 1, lmax: 1 };
   var GUIDE_HOLD = 800, GUIDE_FADE = 500;   // ms fully visible after last input, then fade
   var guideId = null, guideT = -1e9, guideHeld = false;   // held = pointer still down on the slider
   var G_RED = '255,82,82', G_GREEN = '96,230,130';
@@ -1605,7 +1609,7 @@
       for (i = 0; i < vines.length; i++) {
         if (vines[i].kind === 'spiral') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 4);
       }
-    } else if (id === 'dropDensity' && layout === 'spiral') {
+    } else if (id === 'dropCount' && layout === 'spiral') {
       for (i = 0; i < vines.length; i++) {
         if (vines[i].kind === 'drop') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 3);
       }
@@ -2358,6 +2362,7 @@
     if (P.fog && fogP.length) solids.push([cdepth(0, HOLE_H - (P.fogLen || 6) * 0.5, 0), 5, 0]);
     if (P.fog) solids.push([cdepth(0.55, 0.6, 0.35), 8, 0]);   // the physical spotlight fixture
     if (P.fog) solids.push([cdepth(0, HOLE_H - FOG_TOP * 0.5, 0), 9, 0]);   // the emitter can
+    if (P.topRing) solids.push([cdepth(0, HOLE_H - 2, 0), 10, 0]);          // rig hub hoop
     if (ropeP) for (i = 0; i < NPOLES; i++) {
       var rma = i * ropeP.rstep + 0.12 + ropeP.rstep / 2;
       solids.push([cdepth(ropeP.rm * Math.sin(rma), ropeP.hm, ropeP.rm * Math.cos(rma)), 6, i]);
@@ -2379,7 +2384,8 @@
       else if (kind === 6) drawRopeBay(idx);
       else if (kind === 7) drawLedString(idx);
       else if (kind === 8) drawSpotlight();
-      else drawFogEmitter();
+      else if (kind === 9) drawFogEmitter();
+      else drawTopRing();
     }
 
     // fog emitter: a short ~8in can hung at the smoke hole; fog spills from its base.
@@ -2405,6 +2411,32 @@
         ctx.beginPath(); ctx.moveTo(eTop[0][0], eTop[0][1]);   // top rim highlight
         for (var ee = 1; ee <= eN; ee++) ctx.lineTo(eTop[ee][0], eTop[ee][1]);
         ctx.closePath(); ctx.strokeStyle = 'rgba(150,162,156,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
+
+    // top ring: the rig-hub hoop suspended under the smoke hole on the halyard
+    // (architecture/rigging.md scheme). Depth-sorted (kind 10); toggled in the Tipi card.
+    function drawTopRing() {
+      var ry = HOLE_H - 2, rr2 = 2, segs = 36;
+      if (!proj(0, ry, 0, pr3)) return;
+      var rcs = pr3[2];   // projected scale at the ring centre — depth reference
+      if (proj(0, HOLE_H - 0.1, 0, pr) && proj(0, ry, 0, pr2)) {   // halyard drop line
+        ctx.strokeStyle = 'rgba(205,195,170,0.55)';
+        ctx.lineWidth = Math.max(0.75, rcs * 0.012);
+        ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
+      }
+      ctx.lineCap = 'round';
+      for (var rgI = 0; rgI < segs; rgI++) {
+        var ra0 = rgI / segs * Math.PI * 2, ra1 = (rgI + 1) / segs * Math.PI * 2;
+        if (proj(rr2 * Math.sin(ra0), ry, rr2 * Math.cos(ra0), pr) &&
+            proj(rr2 * Math.sin(ra1), ry, rr2 * Math.cos(ra1), pr2)) {
+          // nearer segments brighter + thicker — a cheap roundness cue on the hoop
+          var nearF = Math.max(0, Math.min(1, ((pr[2] + pr2[2]) / 2 / rcs - 1) * 4 + 0.5));
+          var rl = (108 + 62 * nearF) | 0;
+          ctx.strokeStyle = 'rgb(' + rl + ',' + (rl + 4) + ',' + (rl + 8) + ')';
+          ctx.lineWidth = Math.max(1, (pr[2] + pr2[2]) / 2 * 0.05 * (0.75 + 0.5 * nearF));
+          ctx.beginPath(); ctx.moveTo(pr[0], pr[1]); ctx.lineTo(pr2[0], pr2[1]); ctx.stroke();
+        }
       }
     }
 
