@@ -1073,50 +1073,9 @@
     var poleStep = Math.PI * 2 / NPOLES;
     function snapPole(ang) { return Math.round((ang - 0.12) / poleStep) * poleStep + 0.12; }
 
-    // draped garland vines — both layouts; generated until the requested total footage is strung
-    var drapedTarget = P.drapedFt == null ? 100 : P.drapedFt;
-    var drapedLen = 0, drapedGuard = 0;
-    while (drapedLen < drapedTarget - 1 && drapedGuard++ < 240) {
-      var t1 = rnd() * Math.PI * 2, dt = 0.7 + rnd() * 1.3, t2 = t1 + dt;
-      // "Vines on poles": anchor both ends to poles so they can be tied on without extra rigging
-      if (P.vinesOnPoles) {
-        t1 = snapPole(t1); t2 = snapPole(t2);
-        if (Math.abs(t2 - t1) < poleStep * 0.5) t2 = t1 + poleStep * (rnd() < 0.5 ? 1 : -1);
-      }
-      var h1 = Math.max(P.hlo, Math.min(7 + rnd() * 8, HOLE_H - 1)), h2 = Math.max(P.hlo, Math.min(7 + rnd() * 8, HOLE_H - 1));
-      var rf = P.vinesOnPoles ? 0.94 : 0.9;
-      var p1 = [coneR(h1) * rf * Math.sin(t1), h1, coneR(h1) * rf * Math.cos(t1)];
-      var p2 = [coneR(h2) * rf * Math.sin(t2), h2, coneR(h2) * rf * Math.cos(t2)];
-      var dist = Math.hypot(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
-      var sag = dist * 0.18 * (0.7 + rnd() * 0.6);
-      var pts2 = [];
-      for (var s = 0; s <= 13; s++) {
-        var t = s / 13;
-        pts2.push([
-          p1[0] + (p2[0] - p1[0]) * t,
-          Math.max(floorG, p1[1] + (p2[1] - p1[1]) * t - sag * Math.sin(Math.PI * t)),
-          p1[2] + (p2[2] - p1[2]) * t
-        ]);
-      }
-      for (var dl2 = 1; dl2 < pts2.length; dl2++) {
-        drapedLen += Math.hypot(pts2[dl2][0] - pts2[dl2 - 1][0], pts2[dl2][1] - pts2[dl2 - 1][1], pts2[dl2][2] - pts2[dl2 - 1][2]);
-      }
-      vines.push({ pts: pts2, leaves: leafify(pts2, rnd), kind: 'd' });
-    }
-    // optional LEDs woven along the draped garlands (counts in the totals when enabled).
-    // Own RNG stream: toggling this must never re-roll anything else in the scene.
-    if (P.drapedLeds && P.vinesDraped) {
-      var dlr = mulberry32(seed ^ 0x5f3759);
-      for (var dgi = 0; dgi < vines.length; dgi++) {
-        if (vines[dgi].kind !== 'd') continue;
-        var gpts = resampleToPitch(vines[dgi].pts);
-        var gn = gpts.length / 3;
-        if (gn < 1) continue;
-        totalPx += gn;
-        strings.push({ pts: gpts, n: gn, hue: 150 + dlr() * 40, phase: dlr() * Math.PI * 2,
-                       drip: -1, nextDrip: 1e9, L: gn * PITCH, anchor: vines[dgi].pts[0], role: 'draped' });
-      }
-    }
+    // (draped garlands generate AFTER the layout branch below, so spiral mode can pin their
+    // endpoints onto the backbone itself)
+    var drapeSpine = null;   // spiral path, exported by the spiral branch for drape anchoring
 
     if (layout === 'spiral') {
       // ===== SPIRAL: one long backbone vine wound up the wall, with random-length drops off it.
@@ -1137,6 +1096,7 @@
         sa += sdA; sy += risePerWrap * sdA / (Math.PI * 2);
       }
       vines.push({ pts: spiralPath, leaves: leafify(spiralPath, rnd), kind: 'spiral' });
+      drapeSpine = spiralPath;
       var spiralLed = resampleToPitch(spiralPath);
       if (spiralLed.length >= 6) {
         var sn = spiralLed.length / 3; totalPx += sn;
@@ -1216,6 +1176,63 @@
         strings.push({ pts: lpts, n: ln, hue: 168 + rnd() * 38, phase: lv.phase, drip: -1, nextDrip: 1 + rnd() * 8, L: lv.len, anchor: lv.anchor, role: 'radial' });
       }
     }
+
+    // draped garland vines — generated until the requested total footage is strung.
+    // SPIRAL layout: both endpoints of every swag sit ON the spiral backbone (nswehla
+    // 2026-08-26) — festoons hang between points of the one long vine, never off to the
+    // walls. RADIAL layout keeps free wall/pole anchors ("Restrict mounting to poles").
+    var drapedTarget = P.drapedFt == null ? 100 : P.drapedFt;
+    var drapedLen = 0, drapedGuard = 0;
+    while (drapedLen < drapedTarget - 1 && drapedGuard++ < 240) {
+      var p1, p2;
+      if (layout === 'spiral' && drapeSpine && drapeSpine.length > 12) {
+        var iA = (rnd() * (drapeSpine.length - 8)) | 0;
+        var iB = Math.min(drapeSpine.length - 1, iA + 6 + (((0.04 + rnd() * 0.22) * drapeSpine.length) | 0));
+        p1 = drapeSpine[iA]; p2 = drapeSpine[iB];
+      } else {
+        var t1 = rnd() * Math.PI * 2, dt = 0.7 + rnd() * 1.3, t2 = t1 + dt;
+        // "Vines on poles": anchor both ends to poles so they can be tied on without extra rigging
+        if (P.vinesOnPoles) {
+          t1 = snapPole(t1); t2 = snapPole(t2);
+          if (Math.abs(t2 - t1) < poleStep * 0.5) t2 = t1 + poleStep * (rnd() < 0.5 ? 1 : -1);
+        }
+        var h1 = Math.max(P.hlo, Math.min(7 + rnd() * 8, HOLE_H - 1)), h2 = Math.max(P.hlo, Math.min(7 + rnd() * 8, HOLE_H - 1));
+        var rf = P.vinesOnPoles ? 0.94 : 0.9;
+        p1 = [coneR(h1) * rf * Math.sin(t1), h1, coneR(h1) * rf * Math.cos(t1)];
+        p2 = [coneR(h2) * rf * Math.sin(t2), h2, coneR(h2) * rf * Math.cos(t2)];
+      }
+      var dist = Math.hypot(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
+      if (dist < 0.8) continue;   // degenerate spine picks: too close to swag
+      var sag = dist * 0.18 * (0.7 + rnd() * 0.6);
+      var pts2 = [];
+      for (var s = 0; s <= 13; s++) {
+        var t = s / 13;
+        pts2.push([
+          p1[0] + (p2[0] - p1[0]) * t,
+          Math.max(floorG, p1[1] + (p2[1] - p1[1]) * t - sag * Math.sin(Math.PI * t)),
+          p1[2] + (p2[2] - p1[2]) * t
+        ]);
+      }
+      for (var dl2 = 1; dl2 < pts2.length; dl2++) {
+        drapedLen += Math.hypot(pts2[dl2][0] - pts2[dl2 - 1][0], pts2[dl2][1] - pts2[dl2 - 1][1], pts2[dl2][2] - pts2[dl2 - 1][2]);
+      }
+      vines.push({ pts: pts2, leaves: leafify(pts2, rnd), kind: 'd' });
+    }
+    // optional LEDs woven along the draped garlands (counts in the totals when enabled).
+    // Own RNG stream: toggling this must never re-roll anything else in the scene.
+    if (P.drapedLeds && P.vinesDraped) {
+      var dlr = mulberry32(seed ^ 0x5f3759);
+      for (var dgi = 0; dgi < vines.length; dgi++) {
+        if (vines[dgi].kind !== 'd') continue;
+        var gpts = resampleToPitch(vines[dgi].pts);
+        var gn = gpts.length / 3;
+        if (gn < 1) continue;
+        totalPx += gn;
+        strings.push({ pts: gpts, n: gn, hue: 150 + dlr() * 40, phase: dlr() * Math.PI * 2,
+                       drip: -1, nextDrip: 1e9, L: gn * PITCH, anchor: vines[dgi].pts[0], role: 'draped' });
+      }
+    }
+
     // foam mats — own RNG (matSeed) so LED/vine tweaks never reshuffle the mats; the mat card
     // re-seeds it only on Reshuffle or when you tap the active coverage icon again
     mats = [];
