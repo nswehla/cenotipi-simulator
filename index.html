@@ -289,13 +289,13 @@
      (outweighs the .toggles label { display:flex } base rule) */
   .toggles label.spiral-only { display: none; }
   body.layout-spiral .toggles label.spiral-only { display: flex; }
-  #saveArm, #dlArm {
+  #saveArm, #dlArm, #ulBtn {
     height: 30px; border-radius: 6px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     background: rgba(79, 216, 196, 0.1); color: var(--aqua); border: 1px solid rgba(79, 216, 196, 0.3);
   }
-  #saveArm svg, #dlArm svg { width: 15px; height: 15px; display: block; }
-  #saveArm:hover, #dlArm:hover { background: rgba(79, 216, 196, 0.2); }
+  #saveArm svg, #dlArm svg, #ulBtn svg { width: 15px; height: 15px; display: block; }
+  #saveArm:hover, #dlArm:hover, #ulBtn:hover { background: rgba(79, 216, 196, 0.2); }
   #saveArm.armed, #dlArm.armed { background: var(--aqua); color: #10201d; border-color: var(--aqua); }
   .slots { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
   .slot {
@@ -315,7 +315,7 @@
   @media (prefers-reduced-motion: reduce) {
     .slots.armed .slot { animation: none; box-shadow: 0 0 7px rgba(79, 216, 196, 0.45); }
   }
-  .slot:focus-visible, #saveArm:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; }
+  .slot:focus-visible, #saveArm:focus-visible, #ulBtn:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; }
 
   /* confirm popup */
   #confirmOv {
@@ -566,9 +566,6 @@
   <div class="card">
     <div class="card-hd">
       <span class="card-title">Load Config</span>
-      <button type="button" id="ulBtn" class="icon-btn" title="Load a downloaded config file" aria-label="Load a config from a downloaded file">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M8 9.2 V2 M4.6 5.4 L8 2 L11.4 5.4 M2.5 12.8 h11"/></svg>
-      </button>
     </div>
     <input type="file" id="cfgFile" accept=".txt,.json,application/json,text/plain" hidden>
     <div class="slots" id="saveSlots">
@@ -583,11 +580,13 @@
       <button id="dlArm" type="button" title="Download — then pick a slot" aria-label="Download a save as a text file — then pick a slot">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M8 2v7.2 M4.6 6.2 L8 9.6 L11.4 6.2 M2.5 12.8 h11"/></svg>
       </button>
+      <button id="ulBtn" type="button" title="Load a config file" aria-label="Load a config from a downloaded file">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M1.8 12.6 V3.4 h4.1 l1.5 1.6 h5.9 v2.2 M1.8 12.6 l2.3 -5.4 h10.4 l-2.3 5.4 z"/></svg>
+      </button>
       <button type="button" class="slot" data-slot="5">6</button>
       <button type="button" class="slot" data-slot="6">7</button>
       <button type="button" class="slot" data-slot="7">8</button>
       <button type="button" class="slot" data-slot="8">9</button>
-      <button type="button" class="slot" data-slot="9">10</button>
     </div>
     <div class="seg-cap" id="saveCap">Save to a slot, then load it back</div>
   </div>
