@@ -94,6 +94,12 @@
   }
   .step-btn:hover { background: rgba(79, 216, 196, 0.2); }
   .step-btn svg { width: 9px; height: 9px; display: block; }
+  /* playlist per-pattern time list (edit mode): name | − | seconds | + | clear */
+  .pl-list { display: flex; flex-direction: column; gap: 3px; margin-top: 5px; }
+  .pl-row { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+  .pl-row .pl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-row .pl-val { flex: 0 0 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  .pl-row .pl-val.inherit { color: var(--muted); }
   .row .unit { flex: 0 0 14px; color: var(--muted); font-size: 11px; }
   .row input[type=number] {
     flex: 1; min-width: 0; background: rgba(79, 216, 196, 0.08); color: var(--ink);
@@ -573,6 +579,7 @@
       <div class="row"><label for="plDwell">Dwell</label><input type="range" id="plDwell" min="3" max="120" step="1" value="20"><output for="plDwell">20 s</output></div>
       <div class="row"><label for="plFade">Fade</label><input type="range" id="plFade" min="0" max="10" step="0.5" value="2"><output for="plFade">2 s</output></div>
       <div class="seg-cap" id="plCap">Tap the pencil, then tap patterns to build the list</div>
+      <div class="pl-list" id="plList" hidden></div>
     </div>
     <div class="card-sec">
       <div class="card-hd">
@@ -2113,7 +2120,7 @@
         pattern = pl.members[plIdx];
         updatePatUI();
         plFadeStart = time;
-        plNextAt = time + pl.dwell;
+        plNextAt = time + plDwellOf(pattern);
       }
     }
     var patFn = PATTERNS[pattern] || PATTERNS.lagoon;
@@ -3211,15 +3218,23 @@
   // config save system (nswehla 2026-08-26): it persists under its own localStorage key,
   // and loading a tipi config never touches the running rotation.
   var PL_KEY = 'cenotipi-playlist-v1';
-  var pl = { members: [], dwell: 20, fade: 2 };
+  var pl = { members: [], dwell: 20, fade: 2, dwells: {} };
   try {
     var plStored = JSON.parse(localStorage.getItem(PL_KEY) || 'null');
     if (plStored && Array.isArray(plStored.members)) {
       pl.members = plStored.members.filter(function (p) { return PATTERNS[p]; });
       if (plStored.dwell > 0) pl.dwell = plStored.dwell;
       if (plStored.fade >= 0) pl.fade = plStored.fade;
+      if (plStored.dwells && typeof plStored.dwells === 'object') {
+        for (var dk in plStored.dwells) {
+          if (PATTERNS[dk] && +plStored.dwells[dk] > 0) pl.dwells[dk] = Math.min(300, +plStored.dwells[dk]);
+        }
+      }
     }
   } catch (e) {}
+  // per-pattern dwell override; absent = the global Dwell slider (mirrored by the brain's
+  // playlist engine — keep the two implementations in lockstep)
+  function plDwellOf(p) { return pl.dwells[p] > 0 ? pl.dwells[p] : pl.dwell; }
   var plOn = false, plEditing = false, plIdx = 0, plNextAt = 0, plPrev = null, plFadeStart = -1e9;
   var plEditBtn = document.getElementById('plEdit'), plPlayBtn = document.getElementById('plPlay');
   var plCapEl = document.getElementById('plCap');
@@ -3232,17 +3247,66 @@
       out.textContent = pl[key] + ' s';
       el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
     }
-    el.addEventListener('input', function () { pl[key] = +el.value; sync(); plPersist(); needsDraw = true; });
+    el.addEventListener('input', function () {
+      pl[key] = +el.value; sync(); plPersist(); needsDraw = true;
+      if (key === 'dwell') plList(); // inherited rows in the edit list track the slider live
+    });
     sync();
   }
   plSlider(plDwellEl, 'dwell'); plSlider(plFadeEl, 'fade');
+  var plListEl = document.getElementById('plList');
+  function plName(k) {
+    for (var i = 0; i < PAT_LIST.length; i++) if (PAT_LIST[i][0] === k) return PAT_LIST[i][1];
+    return k;
+  }
+  var CHEV_DN = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CHEV_UP = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 6.5 L5 3.5 L8 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var X_ICON = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3 3 L7 7 M7 3 L3 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  function plStepDwell(m, dir) {
+    var base = pl.dwells[m] > 0 ? pl.dwells[m] : pl.dwell;
+    pl.dwells[m] = Math.max(3, Math.min(300, base + dir * 5));
+    plPersist(); plList(); needsDraw = true;
+  }
+  function plList() {
+    plListEl.hidden = !plEditing || !pl.members.length;
+    if (plListEl.hidden) { plListEl.innerHTML = ''; return; }
+    plListEl.innerHTML = '';
+    pl.members.forEach(function (m) {
+      var ov = pl.dwells[m] > 0;
+      var row = document.createElement('div');
+      row.className = 'pl-row';
+      var nm = document.createElement('span');
+      nm.className = 'pl-name'; nm.textContent = plName(m);
+      var dn = document.createElement('button');
+      dn.type = 'button'; dn.className = 'step-btn'; dn.innerHTML = CHEV_DN;
+      dn.setAttribute('aria-label', 'Shorter time for ' + plName(m));
+      dn.addEventListener('click', function () { plStepDwell(m, -1); });
+      var val = document.createElement('span');
+      val.className = 'pl-val' + (ov ? '' : ' inherit');
+      val.textContent = (ov ? pl.dwells[m] : pl.dwell) + ' s';
+      val.title = ov ? 'Custom time for this pattern' : 'Using the Dwell slider';
+      var up = document.createElement('button');
+      up.type = 'button'; up.className = 'step-btn'; up.innerHTML = CHEV_UP;
+      up.setAttribute('aria-label', 'Longer time for ' + plName(m));
+      up.addEventListener('click', function () { plStepDwell(m, 1); });
+      var clr = document.createElement('button');
+      clr.type = 'button'; clr.className = 'step-btn'; clr.innerHTML = X_ICON;
+      clr.setAttribute('aria-label', 'Reset ' + plName(m) + ' to the shared dwell');
+      clr.title = 'Back to the Dwell slider';
+      clr.style.visibility = ov ? 'visible' : 'hidden';
+      clr.addEventListener('click', function () { delete pl.dwells[m]; plPersist(); plList(); needsDraw = true; });
+      row.appendChild(nm); row.appendChild(dn); row.appendChild(val); row.appendChild(up); row.appendChild(clr);
+      plListEl.appendChild(row);
+    });
+  }
   function plUI() {
     plEditBtn.classList.toggle('armed', plEditing);
     plPlayBtn.classList.toggle('armed', plOn);
     document.getElementById('plPlayIcon').setAttribute('d', plOn ? 'M4 4 h8 v8 h-8 Z' : 'M5 3 L13 8 L5 13 Z');
-    plCapEl.textContent = plEditing ? 'Tap patterns above to add / remove them'
+    plCapEl.textContent = plEditing ? 'Tap patterns above to add / remove · times below'
       : !pl.members.length ? 'Tap the pencil, then tap patterns to build the list'
       : pl.members.length + ' pattern' + (pl.members.length > 1 ? 's' : '') + (plOn ? ' — playing' : ' — stopped');
+    plList();
     updatePatUI();
   }
   plEditBtn.addEventListener('click', function () { plEditing = !plEditing; plUI(); });
@@ -3255,7 +3319,7 @@
       if (pl.members.indexOf(pattern) < 0) {
         plPrev = pattern; pattern = pl.members[0]; plIdx = 0; plFadeStart = simT; updatePatUI();
       }
-      plNextAt = simT + pl.dwell;
+      plNextAt = simT + plDwellOf(pattern);
     }
     needsDraw = true; plUI();
   });
@@ -3269,11 +3333,12 @@
     b.addEventListener('click', function () {
       if (plEditing) {
         var mi2 = pl.members.indexOf(p[0]);
-        if (mi2 >= 0) pl.members.splice(mi2, 1); else pl.members.push(p[0]);
+        if (mi2 >= 0) { pl.members.splice(mi2, 1); delete pl.dwells[p[0]]; }
+        else pl.members.push(p[0]);
         plPersist(); plUI();
         return;
       }
-      if (plOn) { plIdx = Math.max(0, pl.members.indexOf(p[0])); plNextAt = simT + pl.dwell; plPrev = pattern; plFadeStart = simT; }
+      if (plOn) { plIdx = Math.max(0, pl.members.indexOf(p[0])); plNextAt = simT + plDwellOf(p[0]); plPrev = pattern; plFadeStart = simT; }
       pattern = p[0]; updatePatUI(); needsDraw = true;
     });
     patGrid.appendChild(b);
