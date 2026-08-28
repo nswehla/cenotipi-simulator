@@ -633,6 +633,7 @@
       <div><span class="k">Pixels</span><span class="v" id="sPx">&mdash;</span></div>
       <div><span class="k">LED length</span><span class="v" id="sLen">&mdash;</span></div>
       <div><span class="k">Vine length</span><span class="v" id="sVine">&mdash;</span></div>
+      <div id="sSpiralRow" hidden><span class="k">Spiral run</span><span class="v" id="sSpiral">&mdash;</span></div>
       <div><span class="k">Px / string</span><span class="v" id="sPerStr">&mdash;</span></div>
       <div><span class="k">Full white</span><span class="v" id="sWMax">&mdash;</span></div>
       <div><span class="k">@ 30% cap</span><span class="v" id="sWCap">&mdash;</span></div>
@@ -1450,14 +1451,19 @@
     var per = strings.length ? Math.round(totalPx / strings.length) : 0;
     document.getElementById('sPerStr').textContent = '~' + per;
     // total vine footage: every foliage run in the scene (garlands, verticals, spiral, drops)
-    var vineFt = 0;
+    // spiral backbone tracked separately — it's the power-bus cut length (power.md)
+    var vineFt = 0, spiralRunFt = 0;
     for (var vfi = 0; vfi < vines.length; vfi++) {
-      var vfp = vines[vfi].pts;
+      var vfp = vines[vfi].pts, vfl = 0;
       for (var vfj = 1; vfj < vfp.length; vfj++) {
-        vineFt += Math.hypot(vfp[vfj][0] - vfp[vfj - 1][0], vfp[vfj][1] - vfp[vfj - 1][1], vfp[vfj][2] - vfp[vfj - 1][2]);
+        vfl += Math.hypot(vfp[vfj][0] - vfp[vfj - 1][0], vfp[vfj][1] - vfp[vfj - 1][1], vfp[vfj][2] - vfp[vfj - 1][2]);
       }
+      vineFt += vfl;
+      if (vines[vfi].kind === 'spiral') spiralRunFt = vfl;
     }
     document.getElementById('sVine').innerHTML = Math.round(vineFt) + ' <em>ft (' + (vineFt * 0.3048).toFixed(1) + ' m)</em>';
+    document.getElementById('sSpiralRow').hidden = layout === 'radial' || !spiralRunFt;
+    document.getElementById('sSpiral').innerHTML = Math.round(spiralRunFt) + ' <em>ft (' + (spiralRunFt * 0.3048).toFixed(1) + ' m)</em>';
     var wMax = totalPx * W_PER_PX;
     document.getElementById('sWMax').innerHTML = Math.round(wMax) + ' <em>W (' + Math.round(wMax / 12) + ' A)</em>';
     document.getElementById('sWCap').innerHTML = Math.round(wMax * 0.3) + ' <em>W (' + Math.round(wMax * 0.3 / 12) + ' A)</em>';
