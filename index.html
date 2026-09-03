@@ -257,7 +257,6 @@
   body.layout-spiral .radial-only, body.layout-poles .radial-only { display: none; }
   .row.poles-only { display: none; }
   body.layout-poles .row.poles-only { display: flex; }
-  body.layout-poles .row.spiral-solo { display: none; }
 
   /* bottom-right column: Totals + Load Config */
   #panelBR {
@@ -454,7 +453,7 @@
     <div class="row"><label for="floorGap">Floor gap</label><input type="range" id="floorGap" min="0" max="6" value="1" step="0.25"><output for="floorGap">1 ft</output></div>
     <div class="row radial-only"><label for="fill">Center fill</label><input type="range" id="fill" min="0" max="100" value="45"><output for="fill">45%</output></div>
     <div class="spiral-only">
-      <div class="row spiral-solo"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
+      <div class="row spiral-only"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
       <div class="row poles-only"><label for="polyDenB">Density bottom</label><input type="range" id="polyDenB" min="0" max="100" value="70"><output for="polyDenB">70%</output></div>
       <div class="row poles-only"><label for="polyDenT">Density top</label><input type="range" id="polyDenT" min="0" max="100" value="30"><output for="polyDenT">30%</output></div>
       <div class="row poles-only"><label for="polyJit">Randomness</label><input type="range" id="polyJit" min="0" max="100" value="35"><output for="polyJit">35%</output>
@@ -1179,7 +1178,9 @@
       // ===== POLES: same idea, but the backbone attaches AT poles and runs dead straight
       // pole-to-pole — a polygonal wrap. Attachment density (vertical climb per hop) is a
       // bottom→top gradient with a seeded randomness contribution; every hop is clamped so
-      // a wrap's chords are never crossed by the (smaller) wrap above it.
+      // a wrap's chords are never crossed by the (smaller) wrap above it. Main length caps
+      // the wrap like real garland: it stops when the footage runs out or the band tops
+      // out, whichever comes first (nswehla 2026-08-30).
       var sLo = Math.min(P.hlo, HOLE_H - 1), sHi = Math.min(P.hhi, HOLE_H - 0.5);
       var sArc = 0, spiralPath = [];
       if (layout === 'poles') {
@@ -1189,10 +1190,17 @@
         var slopeR = (R - HOLE_R) / H;                 // ft of radius lost per ft of height
         var cosN = Math.cos(Math.PI / NPOLES);
         var py = sLo, pIdx = Math.round((DOOR_A + 0.4 - 0.12) / poleStep), att = [], guard2 = 0;
+        var polyLen = 0;
         while (py <= sHi && guard2++ < 900) {
           var pa2 = pIdx * poleStep + 0.12;
           var prr = coneR(py) * 0.985;
-          att.push([prr * Math.sin(pa2), py, prr * Math.cos(pa2)]);
+          var npt = [prr * Math.sin(pa2), py, prr * Math.cos(pa2)];
+          if (att.length) {
+            var chord3 = Math.hypot(npt[0] - att[att.length - 1][0], npt[1] - att[att.length - 1][1], npt[2] - att[att.length - 1][2]);
+            if (att.length >= 2 && polyLen + chord3 > P.mainLen) break;  // out of garland
+            polyLen += chord3;
+          }
+          att.push(npt);
           var tf = (py - sLo) / Math.max(0.01, sHi - sLo);
           var den = denB + (denT - denB) * tf;         // density gradient bottom -> top
           var st3 = 0.05 + Math.pow(1 - den, 1.6) * 1.15;   // dense = tiny climb per hop
@@ -1785,7 +1793,7 @@
       if (proj(fgr * Math.sin(cam.az), P.floorGap, fgr * Math.cos(cam.az), pr)) {
         guideLabel(pr[0] + 8, pr[1] - 8, fmtFt(P.floorGap), alpha);
       }
-    } else if (id === 'mainLen' && layout === 'spiral') {
+    } else if (id === 'mainLen' && (layout === 'spiral' || layout === 'poles')) {
       for (i = 0; i < vines.length; i++) {
         if (vines[i].kind === 'spiral') guideStrokePts(vines[i].pts, 'rgba(' + G_RED + ',' + 0.75 * alpha + ')', 4);
       }
