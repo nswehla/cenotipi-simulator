@@ -257,6 +257,8 @@
   body.layout-spiral .radial-only, body.layout-poles .radial-only { display: none; }
   .row.poles-only { display: none; }
   body.layout-poles .row.poles-only { display: flex; }
+  .seg-cap.poles-only { display: none; }
+  body.layout-poles .seg-cap.poles-only { display: block; }
 
   /* bottom-right column: Totals + Load Config */
   #panelBR {
@@ -454,6 +456,7 @@
     <div class="row radial-only"><label for="fill">Center fill</label><input type="range" id="fill" min="0" max="100" value="45"><output for="fill">45%</output></div>
     <div class="spiral-only">
       <div class="row spiral-only"><label for="mainLen">Main length</label><input type="range" id="mainLen" min="20" max="260" value="120" step="5"><output for="mainLen">120 ft</output></div>
+      <div class="seg-cap poles-only" style="margin-top:4px">Attachment points</div>
       <div class="row poles-only"><label for="polyDenB">Density bottom</label><input type="range" id="polyDenB" min="0" max="100" value="70"><output for="polyDenB">70%</output></div>
       <div class="row poles-only"><label for="polyDenT">Density top</label><input type="range" id="polyDenT" min="0" max="100" value="30"><output for="polyDenT">30%</output></div>
       <div class="row poles-only"><label for="polyJit">Randomness</label><input type="range" id="polyJit" min="0" max="100" value="35"><output for="polyJit">35%</output>
@@ -1176,11 +1179,12 @@
       // "Main length" = the spiral's total run — more length packs more wraps into the band;
       // "Drops" = EXACTLY how many vertical vines hang off (evenly spread, jittered).
       // ===== POLES: same idea, but the backbone attaches AT poles and runs dead straight
-      // pole-to-pole — a polygonal wrap. Attachment density (vertical climb per hop) is a
-      // bottom→top gradient with a seeded randomness contribution; every hop is clamped so
-      // a wrap's chords are never crossed by the (smaller) wrap above it. Main length caps
-      // the wrap like real garland: it stops when the footage runs out or the band tops
-      // out, whichever comes first (nswehla 2026-08-30).
+      // pole-to-pole. Final semantics (nswehla 2026-08-30): MAIN LENGTH is how much
+      // garland exists — rise per foot is set so the footage spans the attach band, and
+      // the wrap stops when garland or band runs out. DENSITY bottom/top is the
+      // ATTACHMENT-POINT frequency gradient — 100% ties to every pole, lower skips poles
+      // and cuts longer straight chords across (1..4 pole gaps per hop). RANDOMNESS
+      // jitters the skip pattern. Drops behave exactly as in spiral mode.
       var sLo = Math.min(P.hlo, HOLE_H - 1), sHi = Math.min(P.hhi, HOLE_H - 0.5);
       var sArc = 0, spiralPath = [];
       if (layout === 'poles') {
@@ -1189,27 +1193,56 @@
         var denB = (P.polyDenB == null ? 70 : P.polyDenB) / 100, denT = (P.polyDenT == null ? 30 : P.polyDenT) / 100;
         var slopeR = (R - HOLE_R) / H;                 // ft of radius lost per ft of height
         var cosN = Math.cos(Math.PI / NPOLES);
+        // rise per foot of garland: the footage spans the band exactly, regardless of
+        // which poles it ties to
+        var climbPerFt = Math.max(0.01, sHi - sLo) / Math.max(1, P.mainLen);
         var py = sLo, pIdx = Math.round((DOOR_A + 0.4 - 0.12) / poleStep), att = [], guard2 = 0;
-        var polyLen = 0;
+        var polyLen = 0, chordsXZ = [];
+        // plan-view segment intersection (strict interiors; shared/near endpoints don't
+        // count) — THE no-self-intersect invariant: a wrap's chord may never cross one
+        // below it, whatever mix of pole skips produced them (nswehla 2026-08-30)
+        function xzCross(a, b, c, d) {
+          function orient(p, q, r2) { return (q[0] - p[0]) * (r2[1] - p[1]) - (q[1] - p[1]) * (r2[0] - p[0]); }
+          var o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+          if (o1 * o2 < -1e-9 && o3 * o4 < -1e-9) return true;
+          return false;
+        }
         while (py <= sHi && guard2++ < 900) {
           var pa2 = pIdx * poleStep + 0.12;
           var prr = coneR(py) * 0.985;
           var npt = [prr * Math.sin(pa2), py, prr * Math.cos(pa2)];
           if (att.length) {
-            var chord3 = Math.hypot(npt[0] - att[att.length - 1][0], npt[1] - att[att.length - 1][1], npt[2] - att[att.length - 1][2]);
+            // climb until this chord clears every earlier chord in plan view
+            var prevA = att[att.length - 1], lift = 0;
+            while (lift++ < 80) {
+              var hit = false;
+              for (var ci = 0; ci < chordsXZ.length - 1; ci++) {  // -1: skip the adjacent chord (shares a pole)
+                if (xzCross([prevA[0], prevA[2]], [npt[0], npt[2]], chordsXZ[ci][0], chordsXZ[ci][1])) { hit = true; break; }
+              }
+              if (!hit) break;
+              py += 0.12;
+              if (py > sHi) break;
+              prr = coneR(py) * 0.985;
+              npt = [prr * Math.sin(pa2), py, prr * Math.cos(pa2)];
+            }
+            if (py > sHi) break;  // band exhausted while resolving
+            var chord3 = Math.hypot(npt[0] - prevA[0], npt[1] - prevA[1], npt[2] - prevA[2]);
             if (att.length >= 2 && polyLen + chord3 > P.mainLen) break;  // out of garland
             polyLen += chord3;
+            chordsXZ.push([[prevA[0], prevA[2]], [npt[0], npt[2]]]);
           }
           att.push(npt);
+          // attachment density -> pole skip: 100% ties every pole (k=1), low density cuts
+          // chords across up to 4 pole gaps; randomness jitters the skip. stepMin scales
+          // with gaps skipped; the plan-view check above is the hard guarantee.
           var tf = (py - sLo) / Math.max(0.01, sHi - sLo);
-          var den = denB + (denT - denB) * tf;         // density gradient bottom -> top
-          var st3 = 0.05 + Math.pow(1 - den, 1.6) * 1.15;   // dense = tiny climb per hop
-          st3 *= 1 + (prng() * 2 - 1) * 0.9 * jit;     // seeded jitter, dialable
-          // no-overlap clamp: after a full wrap the attach radius must fit inside this
-          // wrap's chord (inradius = R*cos(pi/N)), so each hop must climb at least this
-          var stepMin = coneR(py) * (1 - cosN) / slopeR / NPOLES;
-          py += Math.max(stepMin, st3, 0.01);
-          pIdx++;
+          var den = denB + (denT - denB) * tf;
+          var kf = 1 + (1 - den) * 3 + (prng() * 2 - 1) * 2 * jit;
+          var kSkip = Math.max(1, Math.min(4, Math.round(kf)));
+          var chordEst = 2 * coneR(py) * 0.985 * Math.sin(kSkip * Math.PI / NPOLES);
+          var stepMin = kSkip * coneR(py) * (1 - cosN) / slopeR / NPOLES;
+          py += Math.max(stepMin, chordEst * climbPerFt, 0.01);
+          pIdx += kSkip;
         }
         for (var ai = 1; ai < att.length; ai++) {
           if (ai === 1) spiralPath.push(att[0]);
@@ -1244,7 +1277,7 @@
         strings.push({ pts: spiralLed, n: sn, hue: 150, phase: 0, drip: -1, nextDrip: 1e9, L: sArc, anchor: spiralPath[0], role: 'spiral' });
       }
       // exactly N drops: evenly spaced arc targets along the backbone, each jittered within
-      // its slot so the spacing reads organic rather than metronomic
+      // its slot so the spacing reads organic rather than metronomic (both layouts)
       var nDrops = Math.round(P.dropCount == null ? 20 : P.dropCount);
       var dropTargets = [];
       for (var dt2 = 0; dt2 < nDrops; dt2++) dropTargets.push(sArc * (dt2 + 0.25 + rnd() * 0.5) / Math.max(1, nDrops));
