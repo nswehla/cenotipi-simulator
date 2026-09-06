@@ -562,6 +562,7 @@
       <label><input type="checkbox" id="lightCast" checked> Light cast</label>
       <label><input type="checkbox" id="drapedLeds"> Draped LEDs</label>
       <label class="spiral-only"><input type="checkbox" id="spiralLeds" checked> Spiral LEDs</label>
+      <label title="Mirror the pattern top-to-bottom in 3D — horizontal planes stay planes; not a per-string pixel reversal"><input type="checkbox" id="flipV"> Flip vertically</label>
     </div>
     <div class="card-sec">
       <div class="card-hd"><span class="card-title">Pattern</span></div>
@@ -786,7 +787,9 @@
   // ---- constants (feet) ----
   // H = canvas apex height (smoke hole rim); poles run just inside the canvas and cross ~2.5 ft above it
   var H = 15, R = 10, HOLE_H = 15, HOLE_R = 0.9, PITCH = 0.0492, DOOR_A = 3.8;
-  var NPOLES = 15, W_PER_PX = 0.3, POLE_D = 0.25; // 3-inch poles; count set by Tipi slider
+  // W_PER_PX measured on the bench 2026-09-05: 8.4 mA/px full white at 12.5 V = 0.105 W/px
+  // (the 0.3 W/px placeholder was the vendor worst case); poles 3-inch, count set by the Tipi slider
+  var NPOLES = 15, W_PER_PX = 0.105, POLE_D = 0.25;
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var cv = document.getElementById('scene');
@@ -995,7 +998,7 @@
   var sliders = ['count', 'lmin', 'lmax', 'hlo', 'hhi', 'floorGap', 'fill', 'bri', 'patSpeed', 'dripSpeed', 'mainLen', 'dropCount', 'polyDenB', 'polyDenT', 'polyJit', 'vineCount', 'drapedFt', 'tipiH', 'tipiD', 'tipiP', 'dayNight', 'ropeH', 'ropeDrape', 'ropeSp', 'fogLen', 'fogSize', 'fogStr', 'fogBri'];
   // pattern speed: slider 0..100 -> exponential multiplier, 50 = 1x, big extremes (0.125x .. 8x)
   function patMulFromSpeed(v) { return Math.pow(8, ((v == null ? 50 : v) - 50) / 50); }
-  var toggles = ['ledStrings', 'lightCast', 'drapedLeds', 'spiralLeds', 'vinesDraped', 'vinesOnPoles', 'fog', 'spotOn', 'drips',
+  var toggles = ['ledStrings', 'lightCast', 'drapedLeds', 'spiralLeds', 'flipV', 'vinesDraped', 'vinesOnPoles', 'fog', 'spotOn', 'drips',
                  'matsOn', 'topRing',
                  'p62', 'p510', 'p54', 'pKid', 'pTod', 'banana'];
   function readParams() {
@@ -1672,13 +1675,143 @@
     }
     return 0;
   }
+  // Gaytway sparkle core (batch 3): 11 slots per string, 3 s cycles with per-slot variation,
+  // fast rise / slow decay, shine spreading 4 px each side. Virtual length 137 on both sides.
+  function sparkleV(k, si, T, hueOut) {
+    var v = 0;
+    for (var s = 0; s < 11; s++) {
+      var vr = 0.7 + hash1(s * 999 + si * 7) * 0.6, cyc = 3 * vr;
+      var off = hash1(s * 777 + si * 7) * cyc, st = (T + off) / cyc, ci = Math.floor(st), prog = st - ci;
+      var seed = ci * 12345 + s * 6789 + si * 7, target = Math.floor(hash1(seed) * 137);
+      var env = prog < 0.3 ? prog / 0.3 : Math.exp(-(prog - 0.3) * 4);
+      var dist = Math.abs(k - target);
+      var w = dist === 0 ? 1 : (dist <= 4 ? 0.5 * (1 - dist / 5) : 0);
+      v += env * w;
+      if (hueOut && w > 0) hueOut[0] = hash1(seed * 1.7);
+    }
+    return Math.min(1, v);
+  }
+  function angDist(a, b) { var d = ((a - b + 3.14159) % 6.28318 + 6.28318) % 6.28318 - 3.14159; return Math.abs(d); }
+  function ease01(x) { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); }
+  var BAND_LO = 2.5, BAND_HI = 9;   // ft: the LED band of the fleet map (tips 2.3 ft, anchors 9 ft) - same in the hub
   var PAT_LIST = [
     ['lagoon', 'Lagoon'], ['matrix', 'Matrix'], ['comets', 'Comets'],
     ['swirl', 'Swirl'], ['plasma', 'Plasma'], ['pulse', 'Center pulse'], ['ripples', 'Ripples'],
     ['waves', 'Waves'], ['rain', 'Rain'], ['rainbowSpin', 'Rainbow spin'], ['rainbowRise', 'Rainbow rise'],
     ['balls', 'Bouncy balls'], ['fire', 'Fire'], ['storm', 'Storm'], ['ants', 'Ants'],
     ['twinkle', 'Twinkle'], ['dazzle', 'Dazzle'], ['chase', 'Chase'], ['aurora', 'Aurora'],
-    ['breathe', 'Breathe'], ['strobe', 'Strobe'], ['ice', 'Ice']
+    ['breathe', 'Breathe'], ['strobe', 'Strobe'], ['ice', 'Ice'],
+    ['cenote', 'Cenote'], ['tide', 'Tide'], ['helix', 'Helix'], ['doorRipple', 'Door ripple'],
+    ['fireflies', 'Fireflies'], ['lightning', 'Lightning'], ['breath', 'Breath'],
+    ['tiltPlane', 'Tilted plane'], ['ballPlane', 'Ball plane'], ['radialRainbow', 'Radial rainbow'],
+    ['planeSweep', 'Plane sweep'],
+    ['levels', 'Levels'], ['spiralStair', 'Spiral stair'], ['quake', 'Quake'], ['meteor3D', 'Meteors'],
+    ['rotor', 'Rotor'], ['shellApex', 'Apex shells'], ['column', 'Column'], ['equalizer', 'Equalizer'],
+    ['orbitalRings', 'Orbital rings'], ['heartbeat', 'Heartbeat'],
+    ['chroma', 'Chroma cut'], ['scanline', 'Scanline'], ['cascade', 'Cascade'],
+    ['cascadeRainbow', 'Rainbow cascade'], ['spread', 'Spread'], ['fan', 'Fan'],
+    ['sparkle', 'Sparkle'], ['rainbowSparkles', 'Rainbow sparkles'], ['bounceTail', 'Bounce'],
+    ['gradient2', 'Gradient'],
+    ['elevator', 'Elevator'],
+    ['stack', 'Stack'],
+    ['waterfallTop', 'Waterfall'],
+    ['snowfall3D', 'Snowfall'],
+    ['horizon', 'Horizon'],
+    ['strata', 'Strata'],
+    ['lighthouse', 'Lighthouse'],
+    ['windmill', 'Windmill'],
+    ['pendulum3D', 'Pendulum'],
+    ['compass', 'Compass'],
+    ['doorBeam', 'Door beam'],
+    ['implode', 'Implode'],
+    ['nova', 'Nova'],
+    ['dominoes', 'Dominoes'],
+    ['pianoRoll', 'Piano roll'],
+    ['typewriter', 'Typewriter'],
+    ['countdown', 'Countdown'],
+    ['cloudDrift', 'Cloud drift'],
+    ['kelp', 'Kelp'],
+    ['flock', 'Flock'],
+    ['dna', 'DNA'],
+    ['tornado', 'Tornado'],
+    ['rainSplash3D', 'Rain splash'],
+    ['raceTrack', 'Race track'],
+    ['hourglass', 'Hourglass'],
+    ['sunset80s', '80s sunset'],
+    ['vaporwave', 'Vaporwave grid'],
+    ['biolum', 'Bioluminescence'],
+    ['lavaLamp', 'Lava lamp'],
+    ['arcticNight', 'Arctic night'],
+    ['candyStripe', 'Candy stripe'],
+    ['goldLeaf', 'Gold leaf'],
+    ['deepSea', 'Deep sea'],
+    ['embers3D', 'Embers'],
+    ['jellyfish', 'Jellyfish'],
+    ['smoke', 'Smoke'],
+    ['moonlight', 'Moonlight'],
+    ['candles', 'Candles'],
+    ['chandelier', 'Chandelier'],
+    ['curtain', 'Curtain'],
+    ['sonar', 'Sonar'],
+    ['zipper', 'Zipper'],
+    ['popcorn', 'Popcorn'],
+    ['binary', 'Binary'],
+    ['glitchBars', 'Glitch bars'],
+    ['vhs', 'VHS'],
+    ['checker3D', 'Flip board'],
+    ['barcode', 'Barcode'],
+    ['eclipse', 'Eclipse'],
+    ['metronome', 'Metronome'],
+    ['wave2D', 'Wave sheet'],
+    ['pond', 'Pond'],
+    ['slinky', 'Slinky'],
+    ['yoyo', 'Yo-yo'],
+    ['interference', 'Interference'],
+    ['spotlight', 'Spotlight'],
+    ['discoBall', 'Disco ball'],
+    ['bubbles', 'Bubbles'],
+    ['tetris', 'Tetris'],
+    ['ferrisWheel', 'Ferris wheel'],
+    ['heat', 'Heat'],
+    ['pinball', 'Pinball'],
+    ['snake', 'Snake (one string)'],
+    ['clock', 'Clock'],
+    ['burst3D', 'Fireworks 3D'],
+    ['tunnel', 'Tunnel'],
+    ['ringChase', 'Ring chase'],
+    ['butterfly', 'Butterfly'],
+    ['cells', 'Cells'],
+    ['traffic', 'Traffic'],
+    ['lanterns', 'Sky lanterns'],
+    ['searchlights', 'Searchlights'],
+    ['morse', 'Morse SOS'],
+    ['scope', 'Oscilloscope'],
+    ['flag', 'Pride flag'],
+    ['pulseTrain', 'Pulse train'],
+    ['moonPhase', 'Moon phase'],
+    ['neonSign', 'Neon sign'],
+    ['gears', 'Gears'],
+    ['dandelion', 'Dandelion'],
+    ['fogfall', 'Fog fall'],
+    ['campfire', 'Campfire'],
+    ['constellations', 'Constellations'],
+    ['pacman', 'Pac-Man'],
+    ['pong', 'Pong'],
+    ['drum', 'Drum'],
+    ['warp', 'Warp'],
+    ['plaid', 'Plaid'],
+    ['honey', 'Honey'],
+    ['kaleido', 'Kaleidoscope'],
+    ['sundial', 'Sundial'],
+    ['randomWipe', 'Random wipe'],
+    ['bloom', 'Bloom'],
+    ['caustics', 'Caustics'],
+    ['ghost', 'Ghost'],
+    ['dayCycle', 'Day cycle'],
+    ['chimes', 'Wind chimes'],
+    ['ink', 'Ink'],
+    ['progress', 'Progress bar'],
+    ['sparkler', 'Sparkler']
   ];
   var PATTERNS = {
     lagoon: function (t, k, si, st, wx, wy, wz, T, out) {
@@ -1786,6 +1919,867 @@
       var p = hash1(k * 7.7 + si * 131.3);
       var v = 0.22 + 0.3 * Math.abs(Math.sin(T * 0.5 + p * 6)) + 0.45 * Math.pow(0.5 + 0.5 * Math.sin(T * (2 + p) + p * 30), 8);
       h2rgb(0.56, 0.45, v, out);
+    },
+    // ---- batch 1 (2026-09-06): 3D-map patterns, twins of renderer/patterns.py ----
+    cenote: function (t, k, si, st, wx, wy, wz, T, out) {
+      var caus = (0.5 + 0.5 * Math.sin(wx * 1.3 + T * 0.7)) * (0.5 + 0.5 * Math.sin(wz * 1.7 - T * 0.9));
+      h2rgb(0.55, 0.9, 0.10 + 0.10 * caus, out);
+      var p = (T * 0.25 + hash1(si * 17.3) * 5) % 5, beam = 0;
+      if (p < 1.6) { var e = p / 1.6 * 1.3 - t; beam = (e >= 0 && e < 0.45) ? Math.exp(-e * 8) * 0.8 : 0; }
+      var q = (T * 0.35 + hash1(si * 29.1) * 3) % 3, bub = 0;
+      if (q < 1.2) { var d = t - (1 - q / 1.2); bub = Math.exp(-d * d * 900) * 0.9; }
+      var add = Math.min(1, beam + bub);
+      out[0] = Math.min(1, out[0] + add * 0.75); out[1] = Math.min(1, out[1] + add * 0.95); out[2] = Math.min(1, out[2] + add);
+    },
+    tide: function (t, k, si, st, wx, wy, wz, T, out) {
+      var L = H * 0.15 + H * 0.6 * (0.5 + 0.5 * Math.sin(T * 0.06));
+      var caus = 0.5 + 0.5 * Math.sin(wx * 0.9 + T * 0.8) * Math.sin(wz * 1.1 + T * 0.6);
+      var below = (0.15 + 0.25 * caus) * (0.6 + 0.4 * Math.min(1, Math.max(0, wy / L)));
+      h2rgb(0.5, 0.85, wy < L ? below : 0.02, out);
+      var foam = Math.exp(-Math.pow((wy - L) / 0.35, 2)) * 0.9;
+      out[0] = Math.min(1, out[0] + foam); out[1] = Math.min(1, out[1] + foam); out[2] = Math.min(1, out[2] + foam);
+    },
+    helix: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(0.6, 0, 0.03, out);
+      var acc = [out[0], out[1], out[2]], tmp = [0, 0, 0];
+      for (var j = 0; j < 2; j++) {
+        var hue = 0.55 + 0.35 * j;
+        for (var g = 0; g < 4; g++) {
+          var lag = g * 0.35, th = T * 0.9 + j * 3.14159 - lag;
+          var h = H * (0.15 + 0.7 * (0.5 + 0.5 * Math.sin((T - lag / 0.9) * 0.23 + j * 1.7)));
+          var r = R * (H - h) / H, px = r * Math.sin(th), pz = r * Math.cos(th);
+          var d2 = (wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz);
+          h2rgb(hue, 0.9, Math.exp(-d2 / 1.2) * (1 - g * 0.22), tmp);
+          acc[0] += tmp[0]; acc[1] += tmp[1]; acc[2] += tmp[2];
+        }
+      }
+      out[0] = Math.min(1, acc[0]); out[1] = Math.min(1, acc[1]); out[2] = Math.min(1, acc[2]);
+    },
+    doorRipple: function (t, k, si, st, wx, wy, wz, T, out) {
+      var d = Math.sqrt(wx * wx + Math.pow((wy - H * 0.35) * 0.9, 2) + (wz - R) * (wz - R)) / (2 * R);
+      var r1 = Math.exp(-Math.pow((d - (T * 0.4) % 1) * 7, 2));
+      var r2 = Math.exp(-Math.pow((d - (T * 0.4 + 0.5) % 1) * 7, 2)) * 0.5;
+      h2rgb(0.58, 0.6, 0.04 + 0.9 * Math.min(1, r1 + r2), out);
+    },
+    fireflies: function (t, k, si, st, wx, wy, wz, T, out) {
+      var p = hash1(k * 7.7 + si * 131.3);
+      var life = (T * 0.15 + p * 10) % 1, gen = Math.floor(T * 0.15 + p * 10);
+      var thr = 0.82 + 0.12 * Math.min(1, Math.max(0, wy / H));
+      var on = hash1(gen * 3.1 + k * 0.7 + si) > thr;
+      var glow = Math.pow(Math.sin(life * 3.14159), 2) * (0.75 + 0.25 * Math.sin(T * 9 + p * 50));
+      h2rgb(0.16, 0.7, on ? glow : 0.01, out);
+    },
+    lightning: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T * 0.25), fp = T * 0.25 - s0;
+      var any = hash1(s0 * 7.7) > 0.5, mine = any && hash1(si * 31.7 + s0 * 11.3) > 0.9;
+      var v = 0.02, s = 0.85;
+      if (any && fp < 0.12) {
+        if (mine) { var head = fp / 0.12 * 1.2; v = t < head ? 0.6 + 0.4 * hash1(k * 0.7 + Math.floor(T * 30) * 3.3) : 0.05; s = 0.05; }
+        else { v = 0.15; s = 0.3; }
+      } else if (any && fp < 1) {
+        v = 0.02 + 0.25 * Math.exp(-(fp - 0.12) * 3) * (0.6 + 0.4 * Math.sin(T * 7 + si)); s = 0.6;
+      }
+      h2rgb(0.6, s, Math.min(1, v), out);
+    },
+    breath: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = (T / 8) % 1, f = 1 - Math.abs(2 * ph - 1);
+      var lit = Math.min(1, Math.max(0, (f - wy / H) * 5 + 0.5));
+      h2rgb(0.07, 0.75, 0.06 + 0.6 * lit, out);
+    },
+    tiltPlane: function (t, k, si, st, wx, wy, wz, T, out) {
+      var a = 0.5 + 0.35 * Math.sin(T * 0.13), b = T * 0.21;
+      var d = wx * Math.sin(a) * Math.cos(b) + wy * Math.cos(a) + wz * Math.sin(a) * Math.sin(b);
+      h2rgb(d / (H * 0.8) - T * 0.05, 1, 0.8, out);
+    },
+    ballPlane: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = T / 3.4, tb = ballH(cyc % 1);
+      var yp = 0.5 + (0.85 * H - 0.5) * tb;
+      var glow = Math.exp(-Math.pow((wy - yp) / 0.35, 2));
+      h2rgb(hash1(Math.floor(cyc) * 5.13), 0.85, 0.03 + glow, out);
+    },
+    radialRainbow: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(Math.sqrt(wx * wx + wz * wz) / R * 1.2 - T * 0.08, 1, 0.8, out);
+    },
+    planeSweep: function (t, k, si, st, wx, wy, wz, T, out) {
+      var yp = H * (0.08 + 0.84 * (0.5 + 0.5 * Math.sin(T * 0.5)));
+      var glow = Math.exp(-Math.pow((wy - yp) / 0.5, 2));
+      h2rgb(yp / H * 0.8 + T * 0.02, 0.9, 0.03 + glow, out);
+    },
+    // ---- batch 2 (2026-09-06): second round of 3D ideas ----
+    levels: function (t, k, si, st, wx, wy, wz, T, out) {
+      var acc = [0.03, 0.03, 0.03], tmp = [0, 0, 0];
+      for (var j = 0; j < 4; j++) {
+        var hj = 0.3 + ((T * 0.05 + j / 4) % 1) * H * 0.9;
+        h2rgb(0.1 + 0.2 * j, 0.9, Math.exp(-Math.pow((wy - hj) / 0.3, 2)), tmp);
+        acc[0] += tmp[0]; acc[1] += tmp[1]; acc[2] += tmp[2];
+      }
+      out[0] = Math.min(1, acc[0]); out[1] = Math.min(1, acc[1]); out[2] = Math.min(1, acc[2]);
+    },
+    spiralStair: function (t, k, si, st, wx, wy, wz, T, out) {
+      var band = Math.atan2(wx, wz) / 6.28318 + wy / H * 2.5 - T * 0.12;
+      band = band - Math.floor(band);
+      h2rgb(wy / H * 0.5 + T * 0.03, 0.9, 0.04 + 0.9 * Math.exp(-(band - 0.5) * (band - 0.5) * 40), out);
+    },
+    quake: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 6), big = hash1(s0 * 3.3) > 0.6 ? Math.exp(-(T - s0 * 6) * 1.5) : 0;
+      var off = (0.2 + 0.8 * big) * 0.6 * Math.sin(T * 17) * Math.sin(T * 3.1);
+      h2rgb(0.6, 0.5, 0.05 + 0.8 * (0.5 + 0.5 * Math.sin((wy + off) * 4.2)), out);
+    },
+    meteor3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 2.5), fp = T / 2.5 - s0, a0 = hash1(s0 * 3.3) * 6.28318, v = 0.02;
+      for (var g = 0; g < 3; g++) {
+        var f = fp - g * 0.05; if (f < 0) continue;
+        var h = (BAND_HI + 1.5) - (BAND_HI + 1.5 - BAND_LO + 1) * f, a = a0 + 1.88 * f, r = R * (H - h) / H - 0.6, px = r * Math.sin(a), pz = r * Math.cos(a);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 3) * (1 - g * 0.4);
+      }
+      h2rgb(0.12, 0.3, Math.min(1, v), out);
+    },
+    rotor: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), sa = T * 0.7;
+      var da = Math.abs((((ang - sa + 3.14159) % 6.28318) + 6.28318) % 6.28318 - 3.14159);
+      var behind = (((sa - ang) % 6.28318) + 6.28318) % 6.28318;
+      h2rgb(0.33, 0.8, Math.min(1, 0.03 + 0.9 * Math.exp(-Math.pow(da * 4, 2)) + 0.3 * Math.exp(-Math.pow(behind * 2, 2))), out);
+    },
+    shellApex: function (t, k, si, st, wx, wy, wz, T, out) {
+      var d = Math.sqrt(wx * wx + (wy - H) * (wy - H) + wz * wz) / (H * 1.2);
+      h2rgb(0.75, 0.8, 0.04 + 0.9 * Math.exp(-Math.pow((d - (T * 0.35) % 1) * 8, 2)), out);
+    },
+    column: function (t, k, si, st, wx, wy, wz, T, out) {
+      var a = T * 0.3 + 0.6 * Math.sin(T * 0.23), rc = R * (H - (BAND_LO + BAND_HI) * 0.5) / H, cx = rc * Math.sin(a), cz = rc * Math.cos(a);
+      var dh = Math.sqrt((wx - cx) * (wx - cx) + (wz - cz) * (wz - cz));
+      h2rgb(0.6 + T * 0.05, 0.85, 0.03 + Math.exp(-Math.pow(dh / 2.5, 2)), out);
+    },
+    equalizer: function (t, k, si, st, wx, wy, wz, T, out) {
+      var lvl = 0.35 + 0.35 * Math.sin(T * 2.1 + si * 1.3) + 0.25 * Math.sin(T * 3.7 + hash1(si * 7) * 6);
+      lvl = Math.min(1, Math.max(0.05, lvl));
+      var top = lvl * H * 0.9;
+      var hue = 0.33 * (1 - Math.min(1, Math.max(0, wy / (H * 0.9))));
+      h2rgb(hue, 0.95, wy < top ? 0.8 : 0.03, out);
+      var peak = Math.exp(-Math.pow((wy - top) / 0.25, 2));
+      out[0] = Math.min(1, out[0] + peak); out[1] = Math.min(1, out[1] + peak); out[2] = Math.min(1, out[2] + peak);
+    },
+    orbitalRings: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), acc = [0.03, 0.03, 0.03], tmp = [0, 0, 0];
+      for (var q = 0; q < 3; q++) {
+        var hk = H * (0.25 + 0.25 * q), ak = T * (0.5 + 0.3 * q) * (q % 2 ? -1 : 1);
+        var da = Math.abs((((ang - ak + 3.14159) % 6.28318) + 6.28318) % 6.28318 - 3.14159);
+        h2rgb(0.15 + 0.3 * q, 0.9, Math.exp(-Math.pow((wy - hk) / 0.3, 2)) * Math.exp(-Math.pow(da * 2, 2)), tmp);
+        acc[0] += tmp[0]; acc[1] += tmp[1]; acc[2] += tmp[2];
+      }
+      out[0] = Math.min(1, acc[0]); out[1] = Math.min(1, acc[1]); out[2] = Math.min(1, acc[2]);
+    },
+    heartbeat: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = (T / 1.2) % 1;
+      var env = Math.exp(-Math.pow((ph - 0.05) * 14, 2)) + 0.6 * Math.exp(-Math.pow((ph - 0.3) * 14, 2));
+      var rf = 1 - 0.5 * Math.sqrt(wx * wx + wz * wz) / R;
+      h2rgb(0, 0.9, 0.04 + 0.9 * env * rf, out);
+    },
+    // ---- batch 3 (2026-09-06): Gaytway ports (../Gaytway/shared/pattern-engine.js) ----
+    chroma: function (t, k, si, st, wx, wy, wz, T, out) {
+      var pos = wy / H, acc = [0.02, 0.02, 0.02];
+      var seps = [0, 0.03, -0.03];
+      for (var i = 0; i < 3; i++) {
+        var cyc = (T * 0.5 + i / 3) % 1;
+        for (var ch = 0; ch < 3; ch++) {
+          var d = Math.abs(pos - (cyc + seps[ch])); d = Math.min(d, 1 - d);
+          var inten = d < 0.015 ? 1 : (d < 0.09 ? (1 - (d - 0.015) / 0.075) * 0.5 : 0);
+          acc[ch] += inten;
+        }
+      }
+      out[0] = Math.min(1, acc[0]); out[1] = Math.min(1, acc[1]); out[2] = Math.min(1, acc[2]);
+    },
+    scanline: function (t, k, si, st, wx, wy, wz, T, out) {
+      var dist = Math.abs(wy / H - 0.5) * 2, cyc = (T * 0.5) % 1;
+      var spread = cyc < 0.5 ? cyc * 2 : (1 - cyc) * 2, edge = spread - dist;
+      var line = (edge >= 0 && edge < 0.08) ? Math.sin(edge / 0.08 * 3.14159) : 0;
+      var wake = edge >= 0.08 ? 0.12 : 0;
+      var v = Math.min(1, 0.02 + line + wake);
+      out[0] = out[1] = out[2] = v;
+    },
+    cascade: function (t, k, si, st, wx, wy, wz, T, out) {
+      var pos = (T * 1.5) % 7, dist = (pos - (si % 7) + 7) % 7;
+      var b = dist < 0.3 ? 1 : (dist < 5.3 ? Math.exp(-(dist - 0.3) / 2) : 0);
+      h2rgb(0, 1, 0.02 + 0.95 * b, out);
+    },
+    cascadeRainbow: function (t, k, si, st, wx, wy, wz, T, out) {
+      var pos = (T * 1.5) % 7, dist = (pos - (si % 7) + 7) % 7;
+      var b = dist < 0.3 ? 1 : (dist < 5.3 ? Math.exp(-(dist - 0.3) / 2) : 0);
+      h2rgb((si % 7) / 7 + T * 0.2, 1, 0.02 + 0.95 * b, out);
+    },
+    spread: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb((si % 7) / 7 + t / 7 + T * 0.48, 1, 0.8, out);
+    },
+    fan: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(t - si * 0.07 + T * 0.1, 1, 0.8, out);
+    },
+    sparkle: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = sparkleV(k, si, T, null);
+      out[0] = out[1] = out[2] = 0.02 + 0.98 * v;
+    },
+    rainbowSparkles: function (t, k, si, st, wx, wy, wz, T, out) {
+      var hue = [0], v = sparkleV(k, si, T, hue);
+      h2rgb(hue[0], 0.9, 0.02 + 0.98 * v, out);
+    },
+    bounceTail: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T * 0.6 + si * 0.1) % 1, bp = cyc < 0.5 ? cyc * 2 : (1 - cyc) * 2;
+      var dist = Math.abs(t - bp);
+      var core = dist < 0.075 ? Math.cos(dist / 0.075 * 3.14159 * 0.5) : 0;
+      var tail = dist > 0.075 ? Math.exp(-(dist - 0.075) * 8) * 0.25 : 0;
+      var v = Math.min(1, core + tail);
+      out[0] = Math.min(1, v + 0.02); out[1] = Math.min(1, v * 0.2 + 0.02); out[2] = 0.02;
+    },
+    gradient2: function (t, k, si, st, wx, wy, wz, T, out) {
+      var kk = T * 0.008, m = Math.min(1, Math.max(0, wy / H)), lo = [0, 0, 0], hi = [0, 0, 0];
+      h2rgb(kk % 1, 0.9, 0.8, lo); h2rgb((kk + 0.45) % 1, 0.9, 0.8, hi);
+      out[0] = lo[0] * (1 - m) + hi[0] * m; out[1] = lo[1] * (1 - m) + hi[1] * m; out[2] = lo[2] * (1 - m) + hi[2] * m;
+    },
+    // ---- candidates A (2026-09-06): planes, rotations, physics, sequences ----
+    elevator: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 4), fp = T / 4 - s0;
+      var hf = 0.5 + hash1(s0 * 3.7) * H * 0.85, ht = 0.5 + hash1((s0 + 1) * 3.7) * H * 0.85;
+      var e = 0; if (fp > 0.5) { var x = Math.min(1, Math.max(0, (fp - 0.5) / 0.5)); e = x * x * (3 - 2 * x); }
+      var yp = hf + (ht - hf) * e;
+      h2rgb(0.12, 0.6, 0.03 + Math.exp(-Math.pow((wy - yp) / 0.4, 2)), out);
+    },
+    stack: function (t, k, si, st, wx, wy, wz, T, out) {
+      var step = H * 0.8 / 8, cyc = (T / 1.5) % 9, nd = Math.floor(cyc);
+      if (nd >= 8) { h2rgb(0.55, 0.8, 0.03, out); return; }
+      var top = 0.4 + nd * step, fp = cyc - nd, yf = H * 0.95 - (H * 0.95 - top) * fp;
+      var pile = wy < top ? 0.5 : 0, fall = Math.exp(-Math.pow((wy - yf) / 0.35, 2));
+      h2rgb(0.55 + nd * 0.04, 0.8, 0.03 + pile + fall, out);
+    },
+    waterfallTop: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T / 3) % 1, yf = H * 0.95 - H * 0.9 * fp, e = (wy - yf) / H;
+      var v = e >= 0 ? Math.exp(-e * 6) : (e > -0.05 ? 1 : 0);
+      h2rgb(0.52, 0.5, 0.03 + v, out);
+    },
+    snowfall3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0.02;
+      for (var i = 0; i < 20; i++) {
+        var ph = (T * 0.07 + hash1(i * 1.3) * 7) % 1, h = H * 0.95 * (1 - ph);
+        var a = hash1(i * 2.9) * 6.28318 + 0.6 * Math.sin(T * 0.5 + i), r = R * (H - h) / H * 0.85 * hash1(i * 4.1);
+        var px = r * Math.sin(a), pz = r * Math.cos(a);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 0.5);
+      }
+      h2rgb(0.58, 0.25, Math.min(1, v), out);
+    },
+    horizon: function (t, k, si, st, wx, wy, wz, T, out) {
+      var tilt = 0.25 * Math.sin(T * 0.3), d = wy - H * 0.5 - tilt * wx;
+      var x = Math.min(1, Math.max(0, d / 1.5 + 0.5)), m = x * x * (3 - 2 * x), sky = [0, 0, 0], sea = [0, 0, 0];
+      h2rgb(0.08, 0.7, 0.5, sky); h2rgb(0.6, 0.9, 0.35, sea);
+      out[0] = sea[0] * (1 - m) + sky[0] * m; out[1] = sea[1] * (1 - m) + sky[1] * m; out[2] = sea[2] * (1 - m) + sky[2] * m;
+    },
+    strata: function (t, k, si, st, wx, wy, wz, T, out) {
+      var acc = [0.02, 0.02, 0.02], tmp = [0, 0, 0];
+      for (var j = 0; j < 6; j++) {
+        var sp = (0.03 + 0.05 * j) * (j % 2 === 0 ? 1 : -1), hj = 0.3 + ((T * sp + j / 6) % 1 + 1) % 1 * H * 0.9;
+        h2rgb(j / 6, 0.9, Math.exp(-Math.pow((wy - hj) / 0.2, 2)), tmp);
+        acc[0] += tmp[0]; acc[1] += tmp[1]; acc[2] += tmp[2];
+      }
+      out[0] = Math.min(1, acc[0]); out[1] = Math.min(1, acc[1]); out[2] = Math.min(1, acc[2]);
+    },
+    lighthouse: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), sa = T * 1.1, da = angDist(ang, sa), behind = (((sa - ang) % 6.28318) + 6.28318) % 6.28318;
+      h2rgb(0.12, 0.15, Math.min(1, 0.03 + Math.exp(-Math.pow(da * 6, 2)) + 0.45 * Math.exp(-behind * 1.5)), out);
+    },
+    windmill: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = ((((Math.atan2(wx, wz) - T * 0.6) * 3) % 6.28318) + 6.28318) % 6.28318;
+      h2rgb(0.09, 0.85, 0.03 + 0.9 * Math.exp(-Math.pow(Math.min(ph, 6.28318 - ph) * 2.5, 2)), out);
+    },
+    pendulum3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var th = 0.9 * Math.sin(T * 1.3), d = Math.abs(wx * Math.cos(th) - wz * Math.sin(th));
+      h2rgb(0.75, 0.7, 0.03 + Math.exp(-Math.pow(d / 1.2, 2)), out);
+    },
+    compass: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), acc = [0.03, 0.03, 0.03], tmp = [0, 0, 0];
+      for (var q = 0; q < 4; q++) {
+        h2rgb(0, q === 0 ? 0.9 : 0, Math.exp(-Math.pow(angDist(ang, T * 0.15 + q * 1.5708) * 5, 2)), tmp);
+        acc[0] += tmp[0]; acc[1] += tmp[1]; acc[2] += tmp[2];
+      }
+      out[0] = Math.min(1, acc[0]); out[1] = Math.min(1, acc[1]); out[2] = Math.min(1, acc[2]);
+    },
+    doorBeam: function (t, k, si, st, wx, wy, wz, T, out) {
+      var sw = 0.9 * Math.sin(T * 0.5), dx = wx, dz = wz - R;
+      var a = Math.atan2(dx, -dz), dist = Math.sqrt(dx * dx + dz * dz) / (2 * R);
+      h2rgb(0.14, 0.4, Math.min(1, 0.03 + Math.exp(-Math.pow((a - sw) * 3, 2)) * (0.3 + 0.7 * dist)), out);
+    },
+    implode: function (t, k, si, st, wx, wy, wz, T, out) {
+      var r = Math.sqrt(wx * wx + wz * wz) / R, fp = (T / 2) % 1;
+      var v = Math.min(1, 0.03 + Math.exp(-Math.pow((r - (1 - fp)) * 8, 2)) + Math.exp(-fp * 12) * Math.exp(-Math.pow(r * 3, 2)));
+      out[0] = out[1] = out[2] = v;
+    },
+    nova: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T / 5) % 1, d = Math.sqrt(wx * wx + (wy - H * 0.45) * (wy - H * 0.45) + wz * wz) / (R * 1.4);
+      var stars = hash1(k * 3.3 + si * 17.1) > 0.94 ? 0.25 : 0.02, flash = Math.exp(-fp * 30) * 0.9;
+      var shell = Math.exp(-Math.pow((d - fp * 1.2) * 9, 2)) * (1 - fp), tmp = [0, 0, 0];
+      h2rgb(0, 0, stars + flash, out); h2rgb(0.78, 0.7, shell, tmp);
+      out[0] = Math.min(1, out[0] + tmp[0]); out[1] = Math.min(1, out[1] + tmp[1]); out[2] = Math.min(1, out[2] + tmp[2]);
+    },
+    dominoes: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T / 6) % 1 * 20, mine = cyc - (si % 20);
+      if (mine < 0) { h2rgb(0.05, 0.9, 0.03, out); return; }
+      h2rgb(0.05, 0.9, t < Math.min(1, mine) ? 0.85 : 0.03, out);
+    },
+    pianoRoll: function (t, k, si, st, wx, wy, wz, T, out) {
+      var beat = Math.floor(T * 8), v = 0.03, hue = 0;
+      for (var b = 0; b < 6; b++) {
+        var bt = beat - b;
+        if (hash1(bt * 7.7 + si * 3.1) > 0.85) { v += Math.exp(-(T * 8 - bt) * 0.5) * 0.8; hue = hash1(bt * 1.7); }
+      }
+      h2rgb(hue, 0.5, Math.min(1, v), out);
+    },
+    typewriter: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T / 0.4) % 24, on = (si % 20) < cyc && cyc < 20;
+      h2rgb(0.3, 0.9, on ? 0.85 : 0.03, out);
+    },
+    countdown: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T / 16) % 1 * 16;
+      if (cyc > 15) { var g = 0.9 * Math.exp(-(cyc - 15) * 3) + 0.05; out[0] = out[1] = out[2] = g; return; }
+      h2rgb(0, 0.85, (si % 15) >= cyc ? 0.8 : 0.03, out);
+    },
+    cloudDrift: function (t, k, si, st, wx, wy, wz, T, out) {
+      var n0 = Math.sin(wx * 0.5 + T * 0.3) + Math.sin(wz * 0.6 - T * 0.2) + Math.sin((wx + wz) * 0.35 + wy * 0.4 + T * 0.15);
+      var x = Math.min(1, Math.max(0, n0 / 3 + 0.4)), e = x * x * (3 - 2 * x);
+      h2rgb(0.6, 0.3, 0.06 + 0.5 * e, out);
+    },
+    kelp: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), sway = Math.sin(T * 1.1 + ang * 2) * 0.4;
+      var v = 0.5 + 0.5 * Math.sin((t + sway) * 20 - T * 2);
+      h2rgb(0.3 + 0.05 * Math.sin(ang), 0.9, 0.08 + 0.7 * v * v, out);
+    },
+    flock: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cy = 5.5 + 2.5 * Math.sin(T * 0.17), ca = T * 0.31, cr = R * (H - cy) / H - 1.2, cx = cr * Math.sin(ca), cz = cr * Math.cos(ca), v = 0.02;
+      for (var i = 0; i < 5; i++) {
+        var px = cx + 1.5 * Math.sin(T * 0.9 + i * 1.3), py = cy + 1 * Math.sin(T * 0.7 + i * 2.1), pz = cz + 1.5 * Math.cos(T * 0.8 + i * 0.7);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - py) * (wy - py) + (wz - pz) * (wz - pz)) / 1.5);
+      }
+      h2rgb(0.5, 0.85, Math.min(1, v), out);
+    },
+    dna: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = Math.atan2(wx, wz) / 6.28318 + wy / H * 2 - T * 0.1;
+      var a = ph - Math.floor(ph), b = (ph + 0.5) - Math.floor(ph + 0.5), t1 = [0, 0, 0], t2 = [0, 0, 0];
+      var rung = ((wy * 2) % 1 + 1) % 1 < 0.12 ? 0.35 : 0;
+      h2rgb(0.6, 0.9, Math.exp(-(a - 0.5) * (a - 0.5) * 60), t1); h2rgb(0.08, 0.9, Math.exp(-(b - 0.5) * (b - 0.5) * 60), t2);
+      var g = 0.02 + rung;
+      out[0] = Math.min(1, t1[0] + t2[0] + g); out[1] = Math.min(1, t1[1] + t2[1] + g); out[2] = Math.min(1, t1[2] + t2[2] + g);
+    },
+    tornado: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = Math.atan2(wx, wz) / 6.28318 - T * (0.4 + 0.8 * wy / H) + wy * 0.25, a = ph - Math.floor(ph);
+      h2rgb(0.6, 0.1, 0.03 + 0.9 * Math.exp(-(a - 0.5) * (a - 0.5) * 30), out);
+    },
+    rainSplash3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 2), fp = T / 2 - s0, a = hash1(s0 * 3.3) * 6.28318, v = 0.02;
+      if (fp < 0.5) {
+        var h = BAND_HI + 1 - (BAND_HI + 1 - BAND_LO) * fp / 0.5, r = R * (H - h) / H - 0.5, px = r * Math.sin(a), pz = r * Math.cos(a);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 2);
+      } else {
+        var q = (fp - 0.5) / 0.5;
+        v += Math.exp(-Math.pow((angDist(Math.atan2(wx, wz), a) - q * 2.5) * 2.5, 2)) * Math.exp(-Math.pow((wy - BAND_LO) / 1.5, 2)) * (1 - q);
+      }
+      h2rgb(0.55, 0.6, Math.min(1, v), out);
+    },
+    raceTrack: function (t, k, si, st, wx, wy, wz, T, out) {
+      var behind = (((T * 2.5 - Math.atan2(wx, wz)) % 6.28318) + 6.28318) % 6.28318, band = Math.exp(-Math.pow((wy - (BAND_LO + BAND_HI) * 0.5) / 0.6, 2));
+      h2rgb(0.02, 0.95, Math.min(1, 0.03 + band * (Math.exp(-Math.pow(behind * 6, 2)) + 0.7 * Math.exp(-behind * 1.2))), out);
+    },
+    hourglass: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T / 30) % 1, top = H * 0.5 + H * 0.45 * (1 - fp), bot = H * 0.45 * fp;
+      var upper = (wy > H * 0.5 && wy < top) ? 0.5 : 0, lower = (wy <= H * 0.5 && wy < bot) ? 0.5 : 0;
+      h2rgb(0.11, 0.8, 0.03 + upper + lower + Math.exp(-Math.pow((wy - H * 0.5) / 0.2, 2)) * 0.6, out);
+    },
+    // ---- candidates B (2026-09-06): organic, particles, themed palettes, retro ----
+    sunset80s: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T / 40) % 1, ys = (BAND_HI + 1) - (BAND_HI - BAND_LO + 2) * fp, yy = Math.min(1, Math.max(0, wy / H));
+      var lo = [0, 0, 0], hi = [0, 0, 0]; h2rgb(0.08, 0.95, 0.7, lo); h2rgb(0.9, 0.85, 0.55, hi);
+      if (wy > ys) { out[0] = lo[0] * (1 - yy) + hi[0] * yy; out[1] = lo[1] * (1 - yy) + hi[1] * yy; out[2] = lo[2] * (1 - yy) + hi[2] * yy; }
+      else h2rgb(0.78, 0.9, 0.18, out);
+      var sun = Math.exp(-Math.pow((wy - ys) / 0.45, 2));
+      out[0] = Math.min(1, out[0] + sun); out[1] = Math.min(1, out[1] + sun * 0.85); out[2] = Math.min(1, out[2] + sun * 0.3);
+    },
+    vaporwave: function (t, k, si, st, wx, wy, wz, T, out) {
+      var sa = Math.floor((((Math.atan2(wx, wz) / 6.28318 * 8 + T * 0.1) % 8) + 8) % 8), hb = wy / 1.2 + T * 0.6, sb = Math.floor(hb);
+      var edge = Math.exp(-Math.pow((hb - sb) - 0.5, 2) * 60);
+      if ((((sa + sb) % 2) + 2) % 2 < 1) h2rgb(0.85, 0.9, 0.45, out); else h2rgb(0.5, 0.9, 0.45, out);
+      out[0] = Math.min(1, out[0] + edge * 0.5); out[1] = Math.min(1, out[1] + edge * 0.5); out[2] = Math.min(1, out[2] + edge * 0.5);
+    },
+    biolum: function (t, k, si, st, wx, wy, wz, T, out) {
+      h2rgb(0.62, 0.95, 0.06, out);
+      var v = 0;
+      for (var b = 0; b < 4; b++) {
+        var bt = Math.floor(T * 2) - b;
+        if (hash1(bt * 5.3 + si * 11.1) > 0.8) { var centre = hash1(bt * 3.1 + si) * 137, age = T * 2 - bt; v += Math.exp(-Math.pow((k - centre) / (2 + age * 3), 2)) * Math.exp(-age * 0.8); }
+      }
+      var tmp = [0, 0, 0]; h2rgb(0.45, 0.6, Math.min(1, v), tmp);
+      out[0] = Math.min(1, out[0] + tmp[0]); out[1] = Math.min(1, out[1] + tmp[1]); out[2] = Math.min(1, out[2] + tmp[2]);
+    },
+    lavaLamp: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 3; i++) {
+        var h = H * (0.5 + 0.4 * Math.sin(T * (0.11 + 0.03 * i) + i * 2)), a = T * 0.07 + i * 2.1, r = R * 0.35;
+        var px = r * Math.sin(a), pz = r * Math.cos(a);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 6);
+      }
+      var s = Math.min(1, Math.max(0, v)), s2 = Math.min(1, Math.max(0, v * 1.3));
+      h2rgb(0.02 + 0.06 * s, 0.95, 0.06 + 0.9 * s2, out);
+    },
+    arcticNight: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), p = hash1(k * 7.7 + si * 131.3);
+      var glint = Math.pow(0.5 + 0.5 * Math.sin(T * (1.5 + p) + p * 30), 10) * 0.6;
+      var sheet = 0.5 + 0.5 * Math.sin(ang * 3 + wy * 0.3 + T * 0.3), tmp = [0, 0, 0];
+      h2rgb(0.55, 0.15, 0.08 + glint, out); h2rgb(0.38, 0.85, 0.35 * sheet * Math.min(1, Math.max(0, wy / H)), tmp);
+      out[0] = Math.min(1, out[0] + tmp[0]); out[1] = Math.min(1, out[1] + tmp[1]); out[2] = Math.min(1, out[2] + tmp[2]);
+    },
+    candyStripe: function (t, k, si, st, wx, wy, wz, T, out) {
+      var pitch = 0.4 + 0.5 * (0.5 + 0.5 * Math.sin(T * 0.2)), ph = Math.atan2(wx, wz) / 6.28318 * 3 + wy * pitch - T * 0.25, q = Math.floor(((ph % 3) + 3) % 3);
+      if (q === 0) h2rgb(0.93, 0.55, 0.85, out); else if (q === 1) h2rgb(0.42, 0.45, 0.8, out); else h2rgb(0, 0, 0.8, out);
+    },
+    goldLeaf: function (t, k, si, st, wx, wy, wz, T, out) {
+      var p = hash1(k * 5.7 + si * 77.7), q = hash1(k * 2.3 + si * 13.1), a = T * 0.25, ly = 5.5 + 2 * Math.sin(T * 0.4), r = R * (H - ly) / H - 0.8;
+      var lx = r * Math.sin(a), lz = r * Math.cos(a), pool = Math.exp(-((wx - lx) * (wx - lx) + (wy - ly) * (wy - ly) + (wz - lz) * (wz - lz)) / 12);
+      var gl = Math.pow(0.5 + 0.5 * Math.sin(T * (2 + p * 3) + q * 40), 12);
+      h2rgb(0.11, 0.85, 0.02 + 0.15 * pool + 0.95 * gl * (q > 0.55 ? 1 : 0) * pool, out);
+    },
+    deepSea: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 3), fp = T / 3 - s0, a = hash1(s0 * 2.7) * 6.28318, h = BAND_LO + 0.5 + (BAND_HI - BAND_LO - 1) * hash1(s0 * 4.3), r = R * (H - h) / H - 0.6;
+      var px = r * Math.sin(a), pz = r * Math.cos(a);
+      var lure = Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 2.5) * Math.pow(Math.sin(fp * 3.14159), 2);
+      h2rgb(0.6, 0.9, 0.04 + 0.9 * Math.min(1, lure), out);
+    },
+    embers3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 20; i++) {
+        var ph = (T * 0.12 + hash1(i * 1.7) * 9) % 1, h = BAND_LO + (BAND_HI + 1 - BAND_LO) * ph, a = hash1(i * 3.3) * 6.28318 + ph * 0.6, r = R * (H - h) / H - 0.8 - 1.5 * ph;
+        var px = r * Math.sin(a), pz = r * Math.cos(a);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 1) * (1 - ph);
+      }
+      var s = Math.min(1, Math.max(0, v));
+      h2rgb(0.03 + 0.04 * (1 - s), 1, 0.03 + Math.min(1, v), out);
+    },
+    jellyfish: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T * 0.3 + hash1(si * 7.1) * 3) % 3;
+      if (cyc > 2) { h2rgb(0.8, 0.5, 0.02, out); return; }
+      var e = cyc / 2 * 1.1 - t, bell = (e >= 0 && e < 0.08) ? 0.9 : 0;
+      var tend = (e < 0 && e > -0.35) ? 0.35 * (1 + e / 0.35) * (0.6 + 0.4 * hash1(k * 1.3 + Math.floor(T * 12) * 7.7)) : 0;
+      h2rgb(0.8, 0.5, 0.02 + (bell + tend) * (0.7 + 0.3 * Math.sin(cyc * 6)), out);
+    },
+    smoke: function (t, k, si, st, wx, wy, wz, T, out) {
+      var n0 = Math.sin(wx * 0.9 + wy * 0.8 - T * 0.5) + Math.sin(wz * 0.7 - wy * 0.6 - T * 0.35) + Math.sin((wx - wz) * 0.5 + wy - T * 0.25);
+      var x = Math.min(1, Math.max(0, n0 / 3 + 0.5)), e = x * x * (3 - 2 * x);
+      h2rgb(0.6, 0.05, 0.02 + 0.5 * e * (1 - 0.6 * Math.min(1, Math.max(0, wy / H))), out);
+    },
+    moonlight: function (t, k, si, st, wx, wy, wz, T, out) {
+      var shim = 0.5 + 0.5 * Math.sin(wx * 0.4 + wz * 0.5 + T * 0.2) * Math.sin(wy * 0.6 - T * 0.13);
+      var gap = Math.exp(-Math.pow((wy - H * ((T * 0.04) % 1)) / 1.5, 2)) * 0.35;
+      h2rgb(0.6, 0.35, 0.08 + 0.12 * shim + gap, out);
+    },
+    candles: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fl = 0.6 + 0.4 * hash1(si * 3.3 + Math.floor(T * 11) * 1.7), hgt = 0.06 + 0.05 * fl, e = 1 - t;
+      var v = e < hgt ? 0.9 * fl : Math.exp(-(e - hgt) * 25) * 0.5 * fl;
+      h2rgb(0.06 + 0.04 * (e < hgt * 0.4 ? 1 : 0), 0.95, 0.02 + v, out);
+    },
+    chandelier: function (t, k, si, st, wx, wy, wz, T, out) {
+      var top = Math.exp(-t * 12) * 0.9, cyc = (T * 0.4 + hash1(si * 9.9) * 5) % 5;
+      var drip = cyc < 5 ? Math.exp(-Math.pow((t - cyc / 5 * 1.2) * 20, 2)) * (1 - cyc / 5) : 0;
+      h2rgb(0.1, 0.5, 0.03 + top + drip, out);
+    },
+    curtain: function (t, k, si, st, wx, wy, wz, T, out) {
+      var da = angDist(Math.atan2(wx, wz), 0), fp = (T / 8) % 1, open = 3.14159 * (1 - Math.abs(2 * fp - 1));
+      var x = Math.min(1, Math.max(0, (open - da) * 2 + 0.5)), v = x * x * (3 - 2 * x);
+      h2rgb(0.95, 0.6, 0.03 + 0.8 * v, out);
+    },
+    sonar: function (t, k, si, st, wx, wy, wz, T, out) {
+      var d = Math.sqrt(wx * wx + Math.pow((wy - H * 0.4) * 0.8, 2) + (wz - R) * (wz - R)) / (2.2 * R), fp = (T / 4) % 1, v;
+      if (fp < 0.375) v = Math.exp(-Math.pow((d - fp / 0.375) * 9, 2));
+      else if (fp < 0.75) v = Math.exp(-Math.pow((d - (1 - (fp - 0.375) / 0.375)) * 9, 2)) * 0.5;
+      else v = Math.exp(-Math.pow(d * 6, 2)) * Math.exp(-(fp - 0.75) * 12) * 0.8;
+      h2rgb(0.38, 0.9, 0.03 + Math.min(1, v), out);
+    },
+    zipper: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T * 0.35 + 0.5 * (si % 2)) % 1, close = 1 - Math.abs(2 * fp - 1), e = Math.min(t, 1 - t);
+      var v = (e < close * 0.5 ? 0.8 : 0.03) + Math.exp(-Math.pow((e - close * 0.5) * 30, 2)) * 0.5;
+      h2rgb(0.55, 0.7, Math.min(1, v), out);
+    },
+    popcorn: function (t, k, si, st, wx, wy, wz, T, out) {
+      var pop = hash1(Math.floor(T * 10) * 3.3 + si * 7.7) > 0.93;
+      h2rgb(0.08, pop ? 0 : 0.85, pop ? 0.95 : 0.08, out);
+    },
+    binary: function (t, k, si, st, wx, wy, wz, T, out) {
+      var on = hash1(Math.floor(k / 8) * 3.7 + si * 19.3 + Math.floor(T * 2) * 7.1) > 0.5;
+      h2rgb(0.35, 0.95, on ? 0.8 : 0.04, out);
+    },
+    glitchBars: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fr = Math.floor(T * 15), band = Math.floor(wy / 1.1);
+      var tear = hash1(band * 5.1 + fr * 3.3) > 0.85 ? hash1(band * 7.7 + fr) - 0.5 : 0;
+      h2rgb(wy / H * 0.5 + tear * 0.6 + T * 0.03, 0.85, Math.abs(tear) > 0 ? 0.9 : 0.5, out);
+    },
+    vhs: function (t, k, si, st, wx, wy, wz, T, out) {
+      var noise = 0.04 + 0.05 * hash1(k * 1.3 + si * 3.1 + Math.floor(T * 24) * 9.7), yb = H * ((T * 0.08) % 1);
+      var band = Math.exp(-Math.pow((wy - yb) / 0.8, 2)) * (0.5 + 0.3 * hash1(Math.floor(T * 24) * 1.1));
+      h2rgb(0.6, 0.12, Math.min(1, noise + band), out);
+    },
+    checker3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var x = Math.atan2(wx, wz) / 6.28318 * 8, sa = Math.floor(((x % 8) + 8) % 8), sb = Math.floor(wy / 1.5), flips = Math.floor(T * 0.5 - (sa + sb) * 0.08);
+      if ((((sa + sb + flips) % 2) + 2) % 2 < 1) h2rgb(0.12, 0.9, 0.6, out); else h2rgb(0.6, 0.9, 0.3, out);
+    },
+    barcode: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 2), v = 0.02;
+      for (var i = 0; i < 12; i++) { var hi = hash1(s0 * 3.1 + i * 7.7) * H * 0.95, w = 0.08 + 0.15 * hash1(s0 * 1.3 + i * 2.9); if (Math.abs(wy - hi) < w) v += 0.9; }
+      v = Math.min(1, v); out[0] = out[1] = out[2] = v;
+    },
+    eclipse: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cx = R * 1.2 * Math.sin(T * 0.2), cz = R * 0.3 * Math.cos(T * 0.13), dh = Math.sqrt((wx - cx) * (wx - cx) + (wz - cz) * (wz - cz)) / R;
+      var x = Math.min(1, Math.max(0, (0.55 - dh) * 6 + 0.5)), disc = x * x * (3 - 2 * x), rim = Math.exp(-Math.pow((dh - 0.55) * 8, 2)) * 0.4;
+      h2rgb(0.12, 0.35, 0.55 * (1 - disc) + rim + 0.02, out);
+    },
+    metronome: function (t, k, si, st, wx, wy, wz, T, out) {
+      var tick = Math.floor(T), yp = ((((tick % 2) + 2) % 2) === 0) ? BAND_HI - 1.5 : BAND_LO + 1.5, acc = ((((tick % 4) + 4) % 4) === 0) ? 1 : 0.6;
+      h2rgb(0, 0, 0.03 + Math.exp(-Math.pow((wy - yp) / 0.5, 2)) * acc * Math.exp(-(T - tick) * 1.2), out);
+    },
+    wave2D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ys = (BAND_LO + BAND_HI) * 0.5 + 2.5 * Math.sin(wx / R * 2.5 + T * 0.7) * Math.cos(wz / R * 2 - T * 0.5);
+      h2rgb(0.5 + 0.1 * (ys / H), 0.8, 0.03 + Math.exp(-Math.pow((wy - ys) / 0.4, 2)), out);
+    },
+    pond: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ys = (BAND_LO + BAND_HI) * 0.5;
+      for (var i = 0; i < 5; i++) {
+        var s0 = Math.floor(T / 2.5 + i / 5), age = (T / 2.5 + i / 5 - s0) * 2.5;
+        var dx = (hash1(s0 * 3.1 + i * 7.7) * 2 - 1) * R * 0.8, dz = (hash1(s0 * 5.3 + i * 1.7) * 2 - 1) * R * 0.8;
+        var d = Math.sqrt((wx - dx) * (wx - dx) + (wz - dz) * (wz - dz)), r = age * 4;
+        ys += Math.sin((d - r) * 1.5) * Math.exp(-Math.pow((d - r) * 0.4, 2)) * (1 - age / 2.5) * 1.2;
+      }
+      h2rgb(0.55, 0.85, 0.03 + Math.exp(-Math.pow((wy - ys) / 0.35, 2)), out);
+    },
+    slinky: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T * 0.5 + hash1(si * 3.7)) % 1, head = ease01(fp * 1.6) * 1.1, tail = ease01(fp * 1.6 - 0.5) * 1.1;
+      var lo = tail - 0.02, hi = head + 0.02, inside = (t > lo && t < hi) ? 1 : 0, dens = 0.06 / Math.max(0.06, hi - lo);
+      h2rgb(0.3, 0.9, 0.03 + inside * (0.3 + 0.7 * dens), out);
+    },
+    yoyo: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T * 0.45 + hash1(si * 5.1)) % 1, pos = cyc < 0.25 ? Math.pow(cyc / 0.25, 2) : 1 - (cyc - 0.25) / 0.75;
+      h2rgb(0.95, 0.75, 0.03 + Math.exp(-Math.pow((t - pos) * 25, 2)) + Math.exp(-t * 40) * 0.3, out);
+    },
+    interference: function (t, k, si, st, wx, wy, wz, T, out) {
+      var a = T * 0.15, sx = R * 0.5 * Math.sin(a), sz = R * 0.5 * Math.cos(a), yy = (wy * 0.5) * (wy * 0.5);
+      var d1 = Math.sqrt((wx - sx) * (wx - sx) + (wz - sz) * (wz - sz) + yy), d2 = Math.sqrt((wx + sx) * (wx + sx) + (wz + sz) * (wz + sz) + yy);
+      var w = Math.cos(d1 * 2.2 - T * 1.5) + Math.cos(d2 * 2.2 - T * 1.5), v = (w / 2) * (w / 2);
+      h2rgb(0.6 + 0.1 * (w / 2), 0.7, 0.03 + 0.85 * v, out);
+    },
+    spotlight: function (t, k, si, st, wx, wy, wz, T, out) {
+      var a = T * 0.5 + 1.5 * Math.sin(T * 0.23), tilt = 0.55 + 0.35 * Math.sin(T * 0.31);
+      var dx = Math.sin(tilt) * Math.sin(a), dy = -Math.cos(tilt), dz = Math.sin(tilt) * Math.cos(a);
+      var vx = wx, vy = wy - H, vz = wz, ln = Math.sqrt(vx * vx + vy * vy + vz * vz) + 1e-6;
+      h2rgb(0.13, 0.35, 0.02 + ease01(((vx * dx + vy * dy + vz * dz) / ln - 0.94) * 25), out);
+    },
+    discoBall: function (t, k, si, st, wx, wy, wz, T, out) {
+      var vx = wx, vy = wy - H, vz = wz, ln = Math.sqrt(vx * vx + vy * vy + vz * vz) + 1e-6;
+      var az = Math.atan2(vx, vz), el = Math.asin(Math.min(1, Math.max(-1, vy / ln)));
+      var fa0 = az / 6.28318 * 12 + T * 0.3, fa = fa0 - Math.floor(fa0), fe0 = -el / 1.5708 * 5, fe = fe0 - Math.floor(fe0);
+      var d = Math.sqrt((fa - 0.5) * (fa - 0.5) + (fe - 0.5) * (fe - 0.5)), h0 = Math.floor(fa0) * 0.13;
+      h2rgb(h0 - Math.floor(h0), 0.3, 0.02 + ease01((0.18 - d) * 12) * 0.9, out);
+    },
+    bubbles: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 3; i++) {
+        var sp = 0.12 + 0.1 * hash1(si * 3.1 + i * 7.3), ph = (T * sp + hash1(si * 1.7 + i * 9.1)) % 1;
+        var pos = 1 - ph * 1.05 + 0.02 * Math.sin(T * 5 + i * 2);
+        v += Math.exp(-Math.pow((t - pos) * 40, 2)) * 0.8;
+        if (ph > 0.95) v += Math.exp(-t * 30) * (1 - (ph - 0.95) / 0.05) * 0.8;
+      }
+      h2rgb(0.55, 0.45, 0.03 + Math.min(1, v), out);
+    },
+    tetris: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = (T * 0.25 + hash1(si * 4.4)) % 1, nblk = 8, kk = ph * (nblk + 1), i = Math.floor(kk), fr = kk - i, blk = 1 / nblk;
+      if (i >= nblk) { h2rgb(0.1, 0.2 * (1 - fr), 0.9 * (1 - fr) + 0.03, out); return; }
+      var cn = Math.floor(T * 0.25 + hash1(si * 4.4)), stackTop = 1 - i * blk, j = Math.floor((1 - t) / blk);
+      var inStack = t >= stackTop, ft = (stackTop - blk) * fr, inFall = t >= ft && t < ft + blk;
+      h2rgb(inFall ? hash1(cn * 7.7 + i * 3.1 + si) : hash1(cn * 7.7 + j * 3.1 + si), 0.85, (inFall || inStack) ? 0.8 : 0.03, out);
+    },
+    ferrisWheel: function (t, k, si, st, wx, wy, wz, T, out) {
+      var psi = T * 0.05, ux = Math.sin(psi), uz = Math.cos(psi), cy = H * 0.5, rw = Math.min(R, H) * 0.42, tmp = [0, 0, 0];
+      out[0] = out[1] = out[2] = 0;
+      for (var i = 0; i < 6; i++) {
+        var th = T * 0.35 + i * 6.28318 / 6, px = ux * rw * Math.cos(th), py = cy + rw * Math.sin(th), pz = uz * rw * Math.cos(th);
+        h2rgb(i / 6, 0.9, Math.exp(-((wx - px) * (wx - px) + (wy - py) * (wy - py) + (wz - pz) * (wz - pz)) / 1.6), tmp);
+        out[0] += tmp[0]; out[1] += tmp[1]; out[2] += tmp[2];
+      }
+      out[0] = Math.min(1, out[0] + 0.02); out[1] = Math.min(1, out[1] + 0.02); out[2] = Math.min(1, out[2] + 0.02);
+    },
+    heat: function (t, k, si, st, wx, wy, wz, T, out) {
+      var n = (Math.sin(wx * 0.7 + wy * 1.1 - T * 0.6) + Math.sin(wz * 0.8 - wy * 0.9 - T * 0.45)) * 0.5;
+      var temp = Math.min(1, Math.max(0, 0.6 * (1 - wy / H) + 0.45 * n));
+      h2rgb(0.16 * temp, 1 - 0.6 * temp * temp * temp, 0.02 + 0.95 * temp, out);
+    },
+    pinball: function (t, k, si, st, wx, wy, wz, T, out) {
+      var tb = (T / 2.2) % 1, py = BAND_LO + 0.5 + (BAND_HI - BAND_LO - 1) * (1 - Math.pow(2 * tb - 1, 2)), a = T * 0.5 + 0.8 * Math.sin(T * 0.37), r = R * (H - py) / H - 1;
+      var px = r * Math.sin(a), pz = r * Math.cos(a), g = Math.exp(-((wx - px) * (wx - px) + (wy - py) * (wy - py) + (wz - pz) * (wz - pz)) / 3);
+      h2rgb(0.08, 0.9, 0.03 + Math.min(1, g * 1.5), out);
+    },
+    snake: function (t, k, si, st, wx, wy, wz, T, out) {
+      var N = 15, s = si + ((si % 2) === 0 ? t : 1 - t), head = (T * (N / 20)) % N, d = (((head - s) % N) + N) % N;
+      h2rgb(0.33 + 0.02 * Math.sin(T), 0.9, 0.03 + Math.min(1, Math.exp(-d * 4) + Math.exp(-(N - d) * 20)), out);
+    },
+    clock: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), am = T / 60 * 6.28318, ah = T / 720 * 6.28318;
+      var minute = Math.exp(-Math.pow(angDist(ang, am) * 12, 2)), hour = Math.exp(-Math.pow(angDist(ang, ah) * 12, 2)) * (wy < (BAND_LO + BAND_HI) * 0.5 ? 1 : 0);
+      var tick = Math.exp(-(T % 1) * 6) * 0.15, a = [0, 0, 0], b = [0, 0, 0];
+      h2rgb(0, 0, 0.03 + tick, out); h2rgb(0.55, 0.7, minute, a); h2rgb(0.05, 0.9, hour, b);
+      out[0] = Math.min(1, out[0] + a[0] + b[0]); out[1] = Math.min(1, out[1] + a[1] + b[1]); out[2] = Math.min(1, out[2] + a[2] + b[2]);
+    },
+    burst3D: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 3), fp = T / 3 - s0, a = hash1(s0 * 2.9) * 6.28318, mine = angDist(Math.atan2(wx, wz), a) < 0.21 ? 1 : 0;
+      if (fp < 0.4) {
+        var pos = 1 - Math.pow(fp / 0.4, 0.7) * 0.8;
+        var v = (Math.exp(-Math.pow((t - pos) * 30, 2)) + Math.exp(-Math.pow((t - pos) * 8, 2)) * (t > pos ? 1 : 0) * 0.4) * mine;
+        h2rgb(hash1(s0 * 4.1), 0.2, 0.03 + Math.min(1, v), out); return;
+      }
+      var e = (fp - 0.4) / 0.6, by = BAND_HI + 0.5, rb = R * (H - by) / H, bx = rb * Math.sin(a), bz = rb * Math.cos(a);
+      var d = Math.sqrt((wx - bx) * (wx - bx) + (wy - by) * (wy - by) + (wz - bz) * (wz - bz));
+      h2rgb(hash1(s0 * 4.1), 0.85, 0.03 + Math.exp(-Math.pow((d - e * R * 1.3) * 1, 2)) * Math.pow(1 - e, 1.5), out);
+    },
+    tunnel: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 4; i++) { var ph = (T * 0.35 + i / 4) % 1, yr = H * Math.pow(ph, 2.2); v += Math.exp(-Math.pow((wy - yr) / (0.25 + 0.5 * (1 - ph)), 2)); }
+      h2rgb(0.72 + 0.1 * (wy / H), 0.8, 0.03 + Math.min(1, v), out);
+    },
+    ringChase: function (t, k, si, st, wx, wy, wz, T, out) {
+      var step = Math.floor(T * 4), x = Math.atan2(wx, wz) / 6.28318 * 15 + 0.5, sec = Math.floor(((x % 15) + 15) % 15);
+      var on = ((((sec - step) % 5) + 5) % 5) === 0;
+      h2rgb(0.12 + 0.05 * (step % 3), 0.85, on ? 0.85 : 0.04, out);
+    },
+    butterfly: function (t, k, si, st, wx, wy, wz, T, out) {
+      var xm = Math.abs(wx), tmp = [0, 0, 0]; out[0] = out[1] = out[2] = 0;
+      for (var i = 0; i < 3; i++) {
+        var a = 0.3 + 2.5 * (0.5 + 0.5 * Math.sin(T * 0.3 + i * 2.1)), py = BAND_LO + 1 + (BAND_HI - BAND_LO - 2) * (0.5 + 0.5 * Math.sin(T * 0.27 + i * 0.7)), r = R * (H - py) / H - 0.8;
+        var px = r * Math.sin(a), pz = r * Math.cos(a), g = Math.exp(-((xm - px) * (xm - px) + (wy - py) * (wy - py) + (wz - pz) * (wz - pz)) / 4);
+        h2rgb(0.05 + i * 0.3 + T * 0.01, 0.9, g, tmp); out[0] += tmp[0]; out[1] += tmp[1]; out[2] += tmp[2];
+      }
+      out[0] = Math.min(1, out[0] + 0.02); out[1] = Math.min(1, out[1] + 0.02); out[2] = Math.min(1, out[2] + 0.02);
+    },
+    cells: function (t, k, si, st, wx, wy, wz, T, out) {
+      var best = 1e9, sec = 1e9, hue = 0;
+      for (var i = 0; i < 6; i++) {
+        var a = T * (0.25 + 0.05 * i) + i * 1.05, py = BAND_LO + (BAND_HI - BAND_LO) * (0.5 + 0.45 * Math.sin(T * 0.3 + i * 0.9)), r = R * (H - py) / H;
+        var px = r * Math.sin(a), pz = r * Math.cos(a), d = (wx - px) * (wx - px) + (wy - py) * (wy - py) + (wz - pz) * (wz - pz);
+        if (d < best) { sec = best; best = d; hue = i / 6; } else if (d < sec) sec = d;
+      }
+      h2rgb(hue, 0.85, 0.06 + 0.6 * Math.min(1, Math.max(0, (Math.sqrt(sec) - Math.sqrt(best)) * 1.2)), out);
+    },
+    traffic: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), lowW = Math.exp(-Math.pow((wy - (BAND_LO + 0.8)) / 0.8, 2)), lowR = Math.exp(-Math.pow((wy - (BAND_LO + 2.3)) / 0.8, 2)), vw = 0, vr = 0;
+      for (var i = 0; i < 4; i++) {
+        vw += Math.exp(-Math.pow(angDist(ang, T * (0.6 + 0.15 * i) + i * 1.5) * 8, 2));
+        vr += Math.exp(-Math.pow(angDist(ang, -T * (0.5 + 0.12 * i) + i * 2.2) * 8, 2));
+      }
+      var a = [0, 0, 0]; h2rgb(0.12, 0.1, 0.03 + vw * lowW, out); h2rgb(0, 1, vr * lowR, a);
+      out[0] = Math.min(1, out[0] + a[0]); out[1] = Math.min(1, out[1] + a[1]); out[2] = Math.min(1, out[2] + a[2]);
+    },
+    lanterns: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 2; i++) {
+        var ph = (T * 0.05 + hash1(si * 2.9 + i * 5.1) + i * 0.5) % 1, pos = 1 - ph * 1.1, fl = 0.85 + 0.15 * Math.sin(T * 7 + i * 3 + si);
+        v += Math.exp(-Math.pow((t - pos) * 12, 2)) * fl * Math.min(1, Math.max(0, (pos + 0.1) * 5));
+      }
+      h2rgb(0.07, 0.9, 0.02 + Math.min(1, v), out);
+    },
+    searchlights: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 2; i++) {
+        var sgn = i === 0 ? 1 : -1, a = 0.9 * Math.sin(T * 0.4 + i * 1.7);
+        var dx = Math.sin(a) * Math.cos(T * 0.5 + i), dy = Math.cos(a), dz = Math.sin(a) * Math.sin(T * 0.5 + i);
+        var vx = wx - sgn * R * 0.6, vy = wy, vz = wz, ln = Math.sqrt(vx * vx + vy * vy + vz * vz) + 1e-6;
+        v += ease01(((vx * dx + vy * dy + vz * dz) / ln - 0.94) * 20);
+      }
+      h2rgb(0.15, 0.25, 0.02 + Math.min(1, v * 0.55 + (v > 1.5 ? 0.4 : 0)), out);
+    },
+    morse: function (t, k, si, st, wx, wy, wz, T, out) {
+      var SOS = [1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0];
+      h2rgb(0.1, 0.4, SOS[Math.floor(T / 0.25) % 34] ? 0.85 : 0.03, out);
+    },
+    scope: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), f = 2 + 1.5 * Math.sin(T * 0.11);
+      var yw = (BAND_LO + BAND_HI) * 0.5 + 2.8 * Math.sin(ang * f + T * 2) * (0.6 + 0.4 * Math.sin(T * 0.37));
+      h2rgb(0.33, 0.95, 0.03 + Math.exp(-Math.pow((wy - yw) / 0.3, 2)) + Math.exp(-Math.pow((wy - yw) / 1.2, 2)) * 0.15, out);
+    },
+    flag: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), wave = 0.6 * Math.sin(ang * 2 - T * 1.5) + 0.3 * Math.sin(ang * 5 + T * 2.3), yy = (wy + wave) / H;
+      var band = Math.floor(Math.min(5.99, Math.max(0, (1 - yy) * 6))), hues = [0, 0.08, 0.16, 0.33, 0.62, 0.8];
+      h2rgb(hues[band], 0.95, 0.9 * (0.75 + 0.25 * Math.cos(ang * 2 - T * 1.5)), out);
+    },
+    // ---- candidates D (2026-09-06): fog, fire, play, sky, texture ----
+    pulseTrain: function (t, k, si, st, wx, wy, wz, T, out) {
+      var delay = angDist(Math.atan2(wx, wz), 0) / 3.14159 * 0.6, ph0 = (T - delay) / 1.5, ph = ph0 - Math.floor(ph0);
+      h2rgb(0.5, 0.8, 0.03 + Math.exp(-Math.pow((t - ph * 1.1) * 18, 2)), out);
+    },
+    moonPhase: function (t, k, si, st, wx, wy, wz, T, out) {
+      var xd = Math.sin(Math.atan2(wx, wz)), fp = (T / 40) % 1, term = Math.cos(fp * 6.28318);
+      var lit = fp < 0.5 ? (xd > term ? 1 : 0) : (xd < -term ? 1 : 0), edge = Math.exp(-Math.pow((xd - (fp < 0.5 ? term : -term)) * 6, 2)) * 0.2;
+      h2rgb(0.6, 0.12, 0.03 + lit * 0.7 + edge, out);
+    },
+    neonSign: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T / 12) % 1, start = 0.05 + 0.4 * hash1(si * 3.9 + Math.floor(T / 12) * 1.3), v;
+      if (cyc < start || cyc >= 0.9) v = 0.02;
+      else if (cyc < start + 0.15) { var s = (cyc - start) / 0.15; v = hash1(Math.floor(T * 30) * 1.7 + si) < s * s ? 0.9 : 0.05; }
+      else v = 0.9;
+      h2rgb(0.92, 0.7, v * (1 - 0.05 * hash1(Math.floor(T * 60) + si)), out);
+    },
+    gears: function (t, k, si, st, wx, wy, wz, T, out) {
+      var mid = (BAND_LO + BAND_HI) * 0.5, ang = Math.atan2(wx, wz), upper = wy > mid;
+      var teeth = upper ? 0.5 + 0.5 * Math.sign(Math.sin(ang * 8 + T * 1)) : 0.5 + 0.5 * Math.sign(Math.sin(ang * 8 - T * 1 + 0.4));
+      var line = Math.exp(-Math.pow((wy - mid) / 0.2, 2)) * 0.5;
+      h2rgb(upper ? 0.1 : 0.55, 0.8, Math.min(1, teeth * 0.75 + 0.05 + line), out);
+    },
+    dandelion: function (t, k, si, st, wx, wy, wz, T, out) {
+      var s0 = Math.floor(T / 5), fp = T / 5 - s0, yc = (BAND_LO + BAND_HI) * 0.5;
+      var puff = Math.exp(-Math.pow((wy - yc) / 1.5, 2)) * (1 - Math.min(1, Math.max(0, fp * 4))) * 0.5, v = 0;
+      for (var i = 0; i < 10; i++) {
+        var e = Math.min(1, Math.max(0, fp * 1.2 - hash1(i * 2.7) * 0.2)), a = hash1(s0 * 3.3 + i * 1.9) * 6.28318 + e * (hash1(i * 4.1) - 0.5) * 1.5;
+        var h = yc + e * (BAND_HI + 1 - yc) * (0.6 + 0.4 * hash1(i * 4.1)), r = R * (H - h) / H - 0.8, px = r * Math.sin(a), pz = r * Math.cos(a);
+        v += Math.exp(-((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz)) / 1.2) * (1 - e);
+      }
+      var g = 0.02 + Math.min(1, puff + v); out[0] = out[1] = out[2] = g;
+    },
+    fogfall: function (t, k, si, st, wx, wy, wz, T, out) {
+      var r = Math.sqrt(wx * wx + wz * wz) / R;
+      var core = Math.exp(-Math.pow(r * 3, 2)) * (0.5 + 0.5 * Math.sin(wy * 2 + T * 3 + r * 5)), top = Math.exp(-Math.pow((BAND_HI + 1 - wy) / 2.5, 2)) * 0.6;
+      var floor = Math.exp(-Math.pow((wy - BAND_LO) / 1.5, 2)) * (0.3 + 0.15 * Math.sin(T * 0.8));
+      h2rgb(0.55, 0.08, 0.03 + Math.min(1, core + top + floor), out);
+    },
+    campfire: function (t, k, si, st, wx, wy, wz, T, out) {
+      var r = Math.sqrt(wx * wx + wz * wz) / R, fl = 0.7 + 0.3 * hash1(Math.floor(T * 12) * 1.3 + si * 0.7);
+      var base = Math.exp(-Math.pow((wy - BAND_LO) / (2 + 1.5 * (1 - r)), 2)) * fl, spark = 0;
+      for (var i = 0; i < 3; i++) {
+        var off = hash1(i * 3.1 + si * 1.1), ph = (T * 0.6 + off) % 1;
+        if (hash1(Math.floor(T * 0.6 + off) * 2.2 + i) > 0.6) spark += Math.exp(-Math.pow((wy - (BAND_LO + ph * (BAND_HI - BAND_LO))) / 0.25, 2)) * (1 - ph) * 0.8;
+      }
+      h2rgb(0.02 + 0.06 * base, 0.95, 0.02 + Math.min(1, base + spark), out);
+    },
+    constellations: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = (hash1(k * 3.3 + si * 17.1) > 0.94 ? 1 : 0) * 0.35, s0 = Math.floor(T / 2), fp = T / 2 - s0;
+      for (var j = 0; j < 2; j++) {
+        var seg = s0 - j, a1 = hash1(seg * 2.1) * 6.28318, a2 = hash1(seg * 2.1 + 1) * 6.28318;
+        var y1 = BAND_LO + (BAND_HI - BAND_LO) * hash1(seg * 3.7), y2 = BAND_LO + (BAND_HI - BAND_LO) * hash1(seg * 3.7 + 1), r1 = R * (H - y1) / H, r2 = R * (H - y2) / H;
+        var p1x = r1 * Math.sin(a1), p1z = r1 * Math.cos(a1), p2x = r2 * Math.sin(a2), p2z = r2 * Math.cos(a2);
+        var frac = j === 0 ? Math.min(1, Math.max(0, fp * 1.5)) : 1, fade = j === 0 ? 1 : 1 - fp;
+        var dx = (p2x - p1x) * frac, dy = (y2 - y1) * frac, dz = (p2z - p1z) * frac, ll = dx * dx + dy * dy + dz * dz + 1e-6;
+        var tt = Math.min(1, Math.max(0, ((wx - p1x) * dx + (wy - y1) * dy + (wz - p1z) * dz) / ll));
+        var qx = p1x + dx * tt, qy = y1 + dy * tt, qz = p1z + dz * tt;
+        v += Math.exp(-((wx - qx) * (wx - qx) + (wy - qy) * (wy - qy) + (wz - qz) * (wz - qz)) / 0.5) * fade;
+      }
+      var g = 0.02 + Math.min(1, v); out[0] = out[1] = out[2] = g;
+    },
+    pacman: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = (T * 0.2 + hash1(si * 6.1)) % 1, pos = ph * 1.05, dot = ((k % 6) === 0 && t > pos) ? 0.5 : 0;
+      var run = Math.exp(-Math.pow((t - pos) * 30, 2)), mouth = 0.5 + 0.5 * Math.sin(T * 12), b = [0, 0, 0];
+      h2rgb(0.14, 0.9, 0.03 + dot, out); h2rgb(0.14, 1, run * (0.4 + 0.6 * mouth), b);
+      out[0] = Math.min(1, out[0] + b[0]); out[1] = Math.min(1, out[1] + b[1]); out[2] = Math.min(1, out[2] + b[2]);
+    },
+    pong: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = (T / 2) % 2, tri = ph < 1 ? ph : 2 - ph, by = (BAND_LO + BAND_HI) * 0.5 + 2.5 * Math.sin(T * 0.9), zr = R * (H - by) / H - 0.5, bz = zr - tri * 2 * zr, bx = R * 0.3 * Math.sin(T * 0.7);
+      var ball = Math.exp(-((wx - bx) * (wx - bx) + (wy - by) * (wy - by) + (wz - bz) * (wz - bz)) / 1.5);
+      var ang = Math.atan2(wx, wz), band = Math.exp(-Math.pow((wy - by) / 1, 2));
+      var padD = Math.exp(-Math.pow(angDist(ang, 0) * 4, 2)) * band, padB = Math.exp(-Math.pow(angDist(ang, 3.14159) * 4, 2)) * band, a = [0, 0, 0], b = [0, 0, 0];
+      h2rgb(0, 0, 0.03 + ball, out); h2rgb(0.55, 0.8, padD * 0.8, a); h2rgb(0, 0.8, padB * 0.8, b);
+      out[0] = Math.min(1, out[0] + a[0] + b[0]); out[1] = Math.min(1, out[1] + a[1] + b[1]); out[2] = Math.min(1, out[2] + a[2] + b[2]);
+    },
+    drum: function (t, k, si, st, wx, wy, wz, T, out) {
+      var beat = Math.floor(T * 2), e = T * 2 - beat, acc = (beat % 4) === 0 ? 1 : 0.6;
+      var yh = BAND_LO + (BAND_HI - BAND_LO) * 0.9 * acc * Math.sin(e * 3.14159) * Math.exp(-e * 1.5);
+      var v = Math.exp(-Math.pow((wy - yh) / 0.6, 2)) * acc + Math.exp(-Math.abs(wy - BAND_LO) / 1.5) * 0.25 * (1 - e);
+      h2rgb(0.02 + 0.03 * acc, 0.9, 0.03 + Math.min(1, v), out);
+    },
+    warp: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 4; i++) {
+        var ph = (T * 0.5 + hash1(si * 3.3 + i * 8.9)) % 1, pos = ph * ph * 1.1, ln = 0.02 + 0.12 * ph, e = t - pos;
+        if (e < 0 && e > -ln) v += 1 + e / ln;
+      }
+      h2rgb(0.6, 0.25, 0.02 + Math.min(1, v), out);
+    },
+    plaid: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), s1 = 0.5 + 0.5 * Math.sign(Math.sin(ang * 6 + T * 0.3)), s2 = 0.5 + 0.5 * Math.sign(Math.sin(wy * 2.5 + T * 0.5));
+      var a = [0, 0, 0], b = [0, 0, 0]; h2rgb(0, 0.9, 0.45, a); h2rgb(0.35, 0.9, 0.45, b);
+      out[0] = Math.min(1, a[0] * s1 + b[0] * s2 + 0.03); out[1] = Math.min(1, a[1] * s1 + b[1] * s2 + 0.03); out[2] = Math.min(1, a[2] * s1 + b[2] * s2 + 0.03);
+    },
+    honey: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = (T * 0.15 + hash1(si * 8.1)) % 1, v;
+      if (cyc < 0.7) { var e = cyc / 0.7, tail = e * e * 0.6; v = Math.exp(-t * 15) * 0.8 + (t < tail ? 0.5 * (1 - t / (tail + 1e-6)) + 0.1 : 0) + Math.exp(-Math.pow((t - tail) * 25, 2)) * 0.7; }
+      else { var e2 = (cyc - 0.7) / 0.3, pos = 0.6 + e2 * e2 * 0.5; v = Math.exp(-t * 15) * 0.5 + Math.exp(-Math.pow((t - pos) * 20, 2)) * 0.9; }
+      h2rgb(0.11, 0.9, 0.02 + Math.min(1, v), out);
+    },
+    kaleido: function (t, k, si, st, wx, wy, wz, T, out) {
+      var wedge = 6.28318 / 6, w = (((Math.atan2(wx, wz) - T * 0.1) % wedge) + wedge) % wedge; if (w > wedge * 0.5) w = wedge - w;
+      var tmp = [0, 0, 0]; out[0] = out[1] = out[2] = 0;
+      for (var i = 0; i < 3; i++) {
+        var wk = wedge * 0.5 * (0.5 + 0.5 * Math.sin(T * 0.3 + i * 2.1)), yk = H * (0.5 + 0.35 * Math.sin(T * 0.21 + i * 1.3));
+        h2rgb(i * 0.33 + T * 0.02, 0.9, Math.exp(-Math.pow((w - wk) * 12, 2)) * Math.exp(-Math.pow((wy - yk) / 3, 2)), tmp);
+        out[0] += tmp[0]; out[1] += tmp[1]; out[2] += tmp[2];
+      }
+      out[0] = Math.min(1, out[0] + 0.02); out[1] = Math.min(1, out[1] + 0.02); out[2] = Math.min(1, out[2] + 0.02);
+    },
+    sundial: function (t, k, si, st, wx, wy, wz, T, out) {
+      var shade = Math.exp(-Math.pow(angDist(Math.atan2(wx, wz), T / 60 * 6.28318) * 2.5, 2));
+      h2rgb(0.1, 0.5, 0.04 + 0.6 * (1 - shade), out);
+    },
+    randomWipe: function (t, k, si, st, wx, wy, wz, T, out) {
+      var cyc = Math.floor(T / 10), fp = (T / 10 - cyc) * 2, onAt = hash1(si * 4.7 + cyc * 3.1), offAt = hash1(si * 2.3 + cyc * 5.9);
+      var on = (fp < 1 && fp > onAt) || (fp >= 1 && (fp - 1) < offAt);
+      h2rgb(hash1(cyc * 1.7), 0.85, on ? 0.8 : 0.03, out);
+    },
+    bloom: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ang = Math.atan2(wx, wz), fp = (T / 12) % 1, open = fp < 0.5 ? ease01(fp * 2.5) : ease01((1 - fp) * 2.5);
+      var petal = 0.5 + 0.5 * Math.cos(ang * 5 + T * 0.1), depth = H * (1 - open * 0.9 * Math.sqrt(petal));
+      var lit = ease01((wy - depth) * 2 + 0.5), centre = Math.exp(-Math.pow((H - wy) / 1.5, 2)), a = [0, 0, 0];
+      h2rgb(0.9, 0.7, 0.03 + 0.8 * lit * (0.5 + 0.5 * petal), out); h2rgb(0.14, 0.9, centre * 0.8, a);
+      out[0] = Math.min(1, out[0] + a[0]); out[1] = Math.min(1, out[1] + a[1]); out[2] = Math.min(1, out[2] + a[2]);
+    },
+    caustics: function (t, k, si, st, wx, wy, wz, T, out) {
+      var a = Math.sin(wx * 1.3 + wy * 0.7 + T * 0.9) + Math.sin(wz * 1.1 - wy * 0.9 - T * 0.7), b = Math.sin((wx + wz) * 0.9 + wy * 1.3 - T * 1.1);
+      var line = Math.exp(-Math.pow(a * 1.5, 2)) + Math.exp(-Math.pow(b * 2, 2)), depth = 0.4 + 0.6 * (1 - wy / H);
+      h2rgb(0.5, 0.85, 0.04 + Math.min(1, line * 0.7 * depth), out);
+    },
+    ghost: function (t, k, si, st, wx, wy, wz, T, out) {
+      var a = T * 0.12 + 0.8 * Math.sin(T * 0.05), py = 5 + 1 * Math.sin(T * 0.5), r = R * (H - py) / H - 0.8, px = r * Math.sin(a), pz = r * Math.cos(a);
+      var wob = 1 + 0.3 * Math.sin(wy * 3 + T * 4), g = Math.exp(-((wx - px) * (wx - px) + (wz - pz) * (wz - pz)) / 4) * Math.exp(-Math.pow((wy - py) / (2 * wob), 2));
+      h2rgb(0.5, 0.15, 0.02 + g * (0.55 + 0.45 * Math.sin(T * 0.3)), out);
+    },
+    dayCycle: function (t, k, si, st, wx, wy, wz, T, out) {
+      var bump = function (x, c0, w) { return Math.min(1, Math.max(0, 1 - Math.abs(x - c0) / w)); };
+      var fp = (T / 60) % 1, yy = wy / H, wn = bump(fp, 0, 0.25) + bump(fp, 1, 0.25), wd1 = bump(fp, 0.28, 0.12), wd = bump(fp, 0.5, 0.2), wd2 = bump(fp, 0.72, 0.12);
+      var tot = wn + wd1 + wd + wd2 + 1e-6; wn /= tot; wd1 /= tot; wd /= tot; wd2 /= tot;
+      var star = (hash1(k * 2.1 + si * 9.3) > 0.96 ? 1 : 0) * 0.5, low = 0.4 + 0.6 * (1 - yy);
+      var n = [0, 0, 0], d1 = [0, 0, 0], d = [0, 0, 0], d2 = [0, 0, 0];
+      h2rgb(0.65, 0.9, 0.08, n); h2rgb(0.95 - 0.1 * yy, 0.8, 0.5, d1); h2rgb(0.12, 0.25, 0.75, d); h2rgb(0.02 + 0.06 * yy, 0.95, 0.55, d2);
+      for (var i = 0; i < 3; i++) out[i] = Math.min(1, n[i] * wn + d1[i] * wd1 * low + d[i] * wd + d2[i] * wd2 * low + star * wn);
+    },
+    chimes: function (t, k, si, st, wx, wy, wz, T, out) {
+      var v = 0;
+      for (var i = 0; i < 5; i++) {
+        var hp = 0.15 + 0.7 * hash1(i * 2.9 + si * 0.37), off = hash1(i * 4.3 + si * 1.9), slot = Math.floor(T * 1.5 + off);
+        var hit = hash1(slot * 3.7 + i * 1.3 + si * 5.5) > 0.7, age = (T * 1.5 + off) - slot;
+        v += Math.exp(-Math.pow((t - hp) * 40, 2)) * (0.08 + (hit ? 0.9 * Math.exp(-age * 3) : 0));
+      }
+      h2rgb(0.55, 0.2, 0.02 + Math.min(1, v), out);
+    },
+    ink: function (t, k, si, st, wx, wy, wz, T, out) {
+      var dark = 0;
+      for (var i = 0; i < 3; i++) {
+        var s0 = Math.floor(T / 6 + i / 3), age = (T / 6 + i / 3 - s0) * 6, a = hash1(s0 * 2.3 + i * 7.1) * 6.28318;
+        var h = BAND_LO + (BAND_HI - BAND_LO) * hash1(s0 * 4.9 + i * 3.3), r = R * (H - h) / H * 0.85, rad = 0.5 + age * 1.2;
+        var px = r * Math.sin(a), pz = r * Math.cos(a), d = Math.sqrt((wx - px) * (wx - px) + (wy - h) * (wy - h) + (wz - pz) * (wz - pz));
+        dark += ease01((rad - d) * 1.5 + 0.5) * (1 - Math.min(1, Math.max(0, (age - 3) / 3)));
+      }
+      h2rgb(0.5, 0.6, 0.65 * (1 - Math.min(1, Math.max(0, dark))) + 0.02, out);
+    },
+    progress: function (t, k, si, st, wx, wy, wz, T, out) {
+      var fp = (T / 11 + hash1(si * 2.2) * 0.2) % 1;
+      if (fp > 10 / 11) { var e = (fp - 10 / 11) * 11; h2rgb(0.33, 0.9, 0.9 * (1 - e) + 0.03, out); return; }
+      var p = fp * 1.1, stutter = p + 0.03 * Math.sin(p * 40) - (p < 0.95 ? 0.03 * hash1(Math.floor(p * 12) + si) : 0);
+      h2rgb(0.55, 0.85, 0.03 + (t < stutter ? 0.7 : 0) + Math.exp(-Math.pow((t - stutter) * 40, 2)) * 0.3, out);
+    },
+    sparkler: function (t, k, si, st, wx, wy, wz, T, out) {
+      var ph = (T * 0.08 + hash1(si * 3.1)) % 1, pos = ph * 1.05, sp = hash1(k * 1.7 + si * 3.3 + Math.floor(T * 30) * 7.7);
+      var near = Math.exp(-Math.pow((t - pos) * 15, 2)), v = near * (0.3 + 0.7 * (sp > 0.5 ? 1 : 0)) + (t > pos ? 0.08 : 0);
+      h2rgb(near > 0.3 ? 0.12 : 0.06, near > 0.3 ? 0.3 : 0.95, 0.02 + Math.min(1, v), out);
     }
   };
 
@@ -2177,7 +3171,23 @@
       patFnB = PATTERNS[plPrev] || null;
     }
     var rgbv = [0, 0, 0], rgbv2 = [0, 0, 0];
+    // Vertical flip (nswehla 2026-09-05): mirror the PATTERN'S FRAME, never the pixels.
+    // Every pixel keeps its true 3D place; the pattern is sampled at y mirrored about the
+    // vertical midpoint of all LED pixels (u and pixel index reversed for the per-string
+    // effects), so a horizontal plane stays a horizontal plane across strings of different
+    // lengths. Applied inside evalPat so strings, light casts and the edge light all agree.
+    // The hub renderer (engine.render_frame) applies the identical rule.
+    var flipV = !!P.flipV, yMir = 0;
+    if (flipV) {
+      var fyLo = Infinity, fyHi = -Infinity;
+      for (var fi = 0; fi < strings.length; fi++) {
+        var fpts = strings[fi].pts;
+        for (var fk = 1; fk < fpts.length; fk += 3) { if (fpts[fk] < fyLo) fyLo = fpts[fk]; if (fpts[fk] > fyHi) fyHi = fpts[fk]; }
+      }
+      yMir = fyLo <= fyHi ? fyLo + fyHi : 0;
+    }
     function evalPat(u, i2, s2, st2, x, y, z, tt, out) {
+      if (flipV) { y = yMir - y; u = 1 - u; if (st2 && st2.n > 1) i2 = st2.n - 1 - i2; }
       patFn(u, i2, s2, st2, x, y, z, tt, out);
       if (patFnB && plMix > 0) {
         patFnB(u, i2, s2, st2, x, y, z, tt, rgbv2);
